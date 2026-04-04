@@ -1,0 +1,26 @@
+# ── Environment files ──────────────────────
+.env
+*.env
+
+# ── Kotlin / Gradle ────────────────────────
+backend/.gradle/
+backend/build/
+backend/.idea/
+backend/.kotlin/
+backend/out/
+
+# ── Python ─────────────────────────────────
+ml-service/__pycache__/
+ml-service/venv/
+ml-service/.venv/
+ml-service/*.pyc
+
+# ── Node.js / Next.js ──────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# ── OS ─────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
