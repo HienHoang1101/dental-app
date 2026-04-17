@@ -26,6 +26,9 @@ dependencies {
     implementation(libs.h2)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.dao)
+    implementation(libs.exposed.java.time)
+    implementation("at.favre.lib:bcrypt:0.10.2")  // bcrypt hash password
     implementation(libs.ktor.server.auth)
     implementation(libs.ktor.server.auth.jwt)
     implementation(libs.ktor.server.netty)
