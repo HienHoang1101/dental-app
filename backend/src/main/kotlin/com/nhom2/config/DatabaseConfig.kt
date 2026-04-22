@@ -9,7 +9,6 @@ import com.nhom2.auth.PatientProfileTable
 
 object DatabaseConfig {
     fun init() {
-        System.setProperty("java.net.preferIPv4Stack", "true")
         // Load .env safely — some .env files may contain duplicate keys which the dotenv library
         // throws on. Fall back to System.getenv if dotenv fails.
         val dot = try {
