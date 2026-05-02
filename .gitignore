@@ -15,6 +15,14 @@ ml-service/venv/
 ml-service/.venv/
 ml-service/*.pyc
 
+# ── ML artifacts (do not commit) ───────────
+ml-service/models/*.joblib
+ml-service/models/*.png
+ml-service/models/label_map.json
+ml-service/models/__results___files/
+ml-service/models/__huggingface_repos__.json
+ml-service/models/phobert_best/
+
 # ── Node.js / Next.js ──────────────────────
 frontend/node_modules/
 frontend/.next/
