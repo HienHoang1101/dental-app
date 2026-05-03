@@ -1,0 +1,26 @@
+package com.nhom2.plugins
+
+import com.nhom2.config.JwtConfig
+import io.ktor.server.application.*
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
+
+fun Application.configureSecurity() {
+    install(Authentication) {
+        jwt("auth-jwt") {
+            verifier(
+                com.auth0.jwt.JWT
+                    .require(JwtConfig.algorithm)
+                    .withIssuer(JwtConfig.getIssuer())
+                    .withAudience(JwtConfig.getAudience())
+                    .build()
+            )
+            validate { credential ->
+                val userId = credential.payload.getClaim("userId")?.asString()
+                if (userId != null) {
+                    JWTPrincipal(credential.payload)
+                } else null
+            }
+        }
+    }
+}
