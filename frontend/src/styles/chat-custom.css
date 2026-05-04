@@ -1,0 +1,34 @@
+/* Custom styles for chat to prevent overflow */
+
+/* Ensure messages wrap properly */
+.chat-message {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Prevent horizontal scroll in chat container */
+.chat-container {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Ensure lists in messages are properly formatted */
+.chat-message ul,
+.chat-message ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.chat-message li {
+  margin: 0.25rem 0;
+}
+
+/* Ensure code blocks don't overflow */
+.chat-message pre,
+.chat-message code {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}

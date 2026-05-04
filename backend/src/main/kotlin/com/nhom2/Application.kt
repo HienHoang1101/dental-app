@@ -2,9 +2,10 @@ package com.nhom2
 
 import com.nhom2.config.DatabaseConfig
 import com.nhom2.plugins.*
+import com.nhom2.utils.SeedData
 import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.plugins.cors.*
+import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.routing.*
 
 fun main(args: Array<String>) {
@@ -14,9 +15,16 @@ fun main(args: Array<String>) {
 fun Application.module() {
     DatabaseConfig.init()
 
+    // Seed initial data (only runs once)
+    val shouldSeed = environment.config.propertyOrNull("app.seedData")?.getString()?.toBoolean() ?: false
+    if (shouldSeed) {
+        SeedData.seed()
+    }
+
     // CORS — cho phép frontend Next.js gọi API
     install(CORS) {
         allowHost("localhost:3000")
+        allowHost("127.0.0.1:3000")
         allowHeader(HttpHeaders.ContentType)
         allowHeader(HttpHeaders.Authorization)
         allowMethod(HttpMethod.Get)
@@ -24,6 +32,8 @@ fun Application.module() {
         allowMethod(HttpMethod.Put)
         allowMethod(HttpMethod.Delete)
         allowMethod(HttpMethod.Options)
+        allowMethod(HttpMethod.Patch)
+        allowCredentials = true
     }
 
     configureSerialization()

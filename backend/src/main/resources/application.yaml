@@ -4,6 +4,10 @@ ktor:
       - com.nhom2.ApplicationKt.module
   deployment:
     port: 8080
+
+app:
+  seedData: false # Set to true to seed initial data on startup
+
 postgres:
   url: "jdbc:postgresql://localhost/default"
   user: username

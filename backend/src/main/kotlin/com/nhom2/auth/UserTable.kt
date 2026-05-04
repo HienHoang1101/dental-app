@@ -1,7 +1,7 @@
 package com.nhom2.auth
 
 import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.javatime.datetime
+import org.jetbrains.exposed.sql.javatime.timestamp
 
 object UserTable : Table("users") {
     val id = uuid("id").autoGenerate()
@@ -11,8 +11,8 @@ object UserTable : Table("users") {
     val phone = text("phone").nullable()
     val role = text("role").default("patient")
     val isActive = bool("is_active").default(true)
-    val createdAt = datetime("created_at")
-    val updatedAt = datetime("updated_at")
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
 
     override val primaryKey = PrimaryKey(id)
 }

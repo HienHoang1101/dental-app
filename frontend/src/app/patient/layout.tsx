@@ -1,0 +1,23 @@
+'use client'
+
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { Header } from '@/components/layout/Header'
+import { Footer } from '@/components/layout/Footer'
+
+export default function PatientLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <ProtectedRoute allowedRoles={['patient']}>
+      <div className="flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1 container mx-auto px-4 py-8">
+          {children}
+        </main>
+        <Footer />
+      </div>
+    </ProtectedRoute>
+  )
+}

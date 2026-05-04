@@ -7,7 +7,23 @@ import io.ktor.server.auth.jwt.*
 
 fun Application.configureSecurity() {
     install(Authentication) {
-        jwt("auth-jwt") {
+        jwt {  // Default authentication (no name)
+            verifier(
+                com.auth0.jwt.JWT
+                    .require(JwtConfig.algorithm)
+                    .withIssuer(JwtConfig.getIssuer())
+                    .withAudience(JwtConfig.getAudience())
+                    .build()
+            )
+            validate { credential ->
+                val userId = credential.payload.getClaim("userId")?.asString()
+                if (userId != null) {
+                    JWTPrincipal(credential.payload)
+                } else null
+            }
+        }
+        
+        jwt("auth-jwt") {  // Named authentication (for backward compatibility)
             verifier(
                 com.auth0.jwt.JWT
                     .require(JwtConfig.algorithm)

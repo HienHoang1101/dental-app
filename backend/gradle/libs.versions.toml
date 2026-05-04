@@ -1,5 +1,5 @@
 [versions]
-exposed = "0.61.0"
+exposed = "0.44.1"
 h2 = "2.3.232"
 koin = "4.1.2-Beta1"
 kotlin = "2.3.0"

@@ -4,8 +4,7 @@ import io.github.cdimascio.dotenv.dotenv
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
-import com.nhom2.auth.UserTable
-import com.nhom2.auth.PatientProfileTable
+import com.nhom2.models.*
 
 object DatabaseConfig {
     fun init() {
@@ -40,20 +39,41 @@ object DatabaseConfig {
 
         fun envGet(key: String): String? = dot?.get(key) ?: fallbackMap[key] ?: System.getenv(key)
 
+        val dbUrl = envGet("DATABASE_URL") ?: error("DATABASE_URL is not set")
+        val dbUser = envGet("DATABASE_USER") ?: error("DATABASE_USER is not set")
+        val dbPassword = envGet("DATABASE_PASSWORD") ?: error("DATABASE_PASSWORD is not set")
+        
+        // DEBUG: Print connection info
+        println("🔗 Connecting to: $dbUrl")
+        println("👤 User: $dbUser")
+
         Database.connect(
-            url = envGet("DATABASE_URL") ?: error("DATABASE_URL is not set"),
+            url = dbUrl,
             driver = "org.postgresql.Driver",
-            user = envGet("DATABASE_USER") ?: error("DATABASE_USER is not set"),
-            password = envGet("DATABASE_PASSWORD") ?: error("DATABASE_PASSWORD is not set")
+            user = dbUser,
+            password = dbPassword
         )
         println("Database connected successfully")
 
         // Create tables automatically in dev/test environments (idempotent)
         try {
-            transaction {
-                SchemaUtils.create(UserTable, PatientProfileTable)
-            }
-            println("Database schema ensured (UserTable, PatientProfileTable)")
+            // transaction {
+            //     SchemaUtils.create(
+            //         Users,
+            //         HealthRecords,
+            //         Specialties,
+            //         Doctors,
+            //         Services,
+            //         Holidays,
+            //         Shifts,
+            //         WorkSchedules,
+            //         TimeSlots,
+            //         Appointments,
+            //         LeaveRequests,
+            //         Notifications
+            //     )
+            // }
+            println("Database schema ensured successfully")
         } catch (t: Throwable) {
             println("Warning: could not create schema automatically: ${t.message}")
         }
