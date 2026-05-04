@@ -13,7 +13,11 @@ Chạy thủ công:
     python rag_pipeline.py --dir path/to/pdf_folder/
 """
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import re
 import uuid
 import argparse
@@ -31,8 +35,8 @@ PINECONE_API_KEY  = os.getenv("PINECONE_API_KEY", "")
 PINECONE_INDEX    = os.getenv("PINECONE_INDEX", "dental-kb")
 PINECONE_REGION   = os.getenv("PINECONE_REGION", "us-east-1")  # Singapore nếu bạn chọn region đó
 
-EMBED_MODEL_NAME  = "sentence-transformers/all-MiniLM-L6-v2"
-EMBED_DIMENSION   = 384   # phải khớp với index dimension trên Pinecone
+EMBED_MODEL_NAME  = "bkai-foundation-models/vietnamese-bi-encoder"
+EMBED_DIMENSION   = 768   # phải khớp với index dimension trên Pinecone
 
 CHUNK_SIZE        = 500   # số ký tự mỗi chunk
 CHUNK_OVERLAP     = 50    # số ký tự overlap giữa các chunk
@@ -77,35 +81,23 @@ def clean_text(text: str) -> str:
 # 2. CHUNK TEXT
 # ══════════════════════════════════════════════════════════
 
-def chunk_text(
-        text: str,
-        chunk_size: int = CHUNK_SIZE,
-        overlap: int = CHUNK_OVERLAP
-) -> Generator[str, None, None]:
-    """
-    Chia text thành các đoạn nhỏ có overlap.
-    Ưu tiên cắt tại dấu chấm/xuống dòng để giữ ngữ nghĩa.
-    """
+def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
+    """Chunk đơn giản, nhanh hơn."""
+    chunks = []
     start = 0
     text_len = len(text)
 
     while start < text_len:
         end = min(start + chunk_size, text_len)
-
-        # Nếu chưa đến cuối, tìm điểm cắt tự nhiên
-        if end < text_len:
-            # Tìm dấu chấm, xuống dòng gần nhất
-            for sep in ['\n\n', '.\n', '. ', '\n']:
-                pos = text.rfind(sep, start, end)
-                if pos != -1:
-                    end = pos + len(sep)
-                    break
-
         chunk = text[start:end].strip()
-        if len(chunk) > 50:  # bỏ chunk quá ngắn
-            yield chunk
-
+        if len(chunk) > 50:
+            chunks.append(chunk)
+        if end == text_len:
+            break
         start = end - overlap
+
+    print(f"  → {len(chunks)} chunks")
+    return chunks
 
 
 # ══════════════════════════════════════════════════════════
@@ -113,13 +105,14 @@ def chunk_text(
 # ══════════════════════════════════════════════════════════
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Chuyển danh sách text thành danh sách vector 384 chiều."""
+    print(f"  Bắt đầu embed {len(texts)} chunks...")
     embeddings = _embed_model.encode(
         texts,
-        batch_size=32,
+        batch_size=8,
         show_progress_bar=True,
         normalize_embeddings=True  # chuẩn hóa để cosine = dot product
     )
+    print("  Embed xong!")
     return embeddings.tolist()
 
 
@@ -148,6 +141,30 @@ def get_pinecone_index():
     else:
         print(f"✅ Index đã tồn tại: {PINECONE_INDEX}")
 
+    return pc.Index(PINECONE_INDEX)
+
+
+def recreate_index():
+    """Xóa index cũ và tạo lại với dimension mới. Dùng khi đổi embedding model."""
+    if not PINECONE_API_KEY:
+        raise ValueError("PINECONE_API_KEY chưa được set trong .env")
+
+    pc = Pinecone(api_key=PINECONE_API_KEY)
+    existing = [idx.name for idx in pc.list_indexes()]
+
+    if PINECONE_INDEX in existing:
+        print(f"Xóa index cũ: {PINECONE_INDEX} ...")
+        pc.delete_index(PINECONE_INDEX)
+        print("✅ Index cũ đã xóa")
+
+    print(f"Tạo index mới: {PINECONE_INDEX} (dim={EMBED_DIMENSION}) ...")
+    pc.create_index(
+        name=PINECONE_INDEX,
+        dimension=EMBED_DIMENSION,
+        metric="cosine",
+        spec=ServerlessSpec(cloud="aws", region=PINECONE_REGION)
+    )
+    print(f"✅ Index mới sẵn sàng")
     return pc.Index(PINECONE_INDEX)
 
 
@@ -218,7 +235,7 @@ def process_pdf(pdf_path: str, index) -> dict:
 
     # Bước 2: Chunk
     print(f"  [2/4] Chunking (size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP})...")
-    chunks = list(chunk_text(clean))
+    chunks = chunk_text(clean)
     print(f"  → {len(chunks)} chunks")
 
     # Bước 3: Embed
@@ -259,6 +276,14 @@ def process_directory(dir_path: str, index) -> list[dict]:
 # 6. HÀM QUERY (dùng khi chatbot cần tìm context)
 # ══════════════════════════════════════════════════════════
 
+
+PINECONE_NAMESPACES = [
+    "rang_ham_mat",
+    "quytrinhchuyenmonbvrhm",
+    "phac_do_dieu_tri_bv_rhm_2023",
+]
+
+
 def query_knowledge_base(
         question: str,
         index,
@@ -269,34 +294,27 @@ def query_knowledge_base(
     Tìm top_k đoạn văn liên quan nhất với câu hỏi.
     Trả về list dict gồm: text, score, source.
     """
-    # Embed câu hỏi
-    question_vector = _embed_model.encode(
-        question,
-        normalize_embeddings=True
+    vector = _embed_model.encode(
+        question, normalize_embeddings=True
     ).tolist()
 
-    # Query Pinecone
-    query_params = {
-        "vector": question_vector,
-        "top_k": top_k,
-        "include_metadata": True
-    }
-    if namespace:
-        query_params["namespace"] = namespace
+    all_results = []
+    for ns in PINECONE_NAMESPACES:
+        results = index.query(
+            vector=vector,
+            top_k=2,
+            include_metadata=True,
+            namespace=ns
+        )
+        for match in results.matches:
+            all_results.append({
+                "text": match.metadata.get("text", ""),
+                "score": round(match.score, 4),
+                "source": match.metadata.get("source", "unknown")
+            })
 
-    results = index.query(**query_params)
-
-    # Format kết quả
-    context_list = []
-    for match in results.matches:
-        context_list.append({
-            "text": match.metadata.get("text", ""),
-            "score": round(match.score, 4),
-            "source": match.metadata.get("source", "unknown"),
-            "namespace": match.metadata.get("namespace", "")
-        })
-
-    return context_list
+    all_results.sort(key=lambda x: -x["score"])
+    return all_results[:top_k]
 
 
 # ══════════════════════════════════════════════════════════
@@ -309,27 +327,37 @@ if __name__ == "__main__":
     group.add_argument("--pdf", type=str, help="Đường dẫn đến 1 file PDF")
     group.add_argument("--dir", type=str, help="Thư mục chứa nhiều PDF")
     group.add_argument("--query", type=str, help="Test query (không upload)")
+    group.add_argument("--reindex", action="store_true",
+                       help="Xóa index cũ, tạo lại và upload toàn bộ pdf_docs/")
     parser.add_argument("--topk", type=int, default=3, help="Số kết quả trả về khi query")
 
     args = parser.parse_args()
 
-    # Kết nối Pinecone
-    index = get_pinecone_index()
-
-    if args.pdf:
-        result = process_pdf(args.pdf, index)
-        print(f"\n✅ Kết quả: {result}")
-
-    elif args.dir:
-        results = process_directory(args.dir, index)
-        print(f"\n✅ Tổng kết:")
+    if args.reindex:
+        index = recreate_index()
+        pdf_dir = str(Path(__file__).parent / "pdf_docs")
+        results = process_directory(pdf_dir, index)
+        print(f"\nTong ket reindex:")
         for r in results:
-            print(f"  {r['filename']}: {r['status']} ({r.get('chunk_count', 0)} chunks)")
+            print(f"  {r.get('filename', '?')}: {r['status']} ({r.get('chunk_count', 0)} chunks)")
+    else:
+        # Kết nối Pinecone
+        index = get_pinecone_index()
 
-    elif args.query:
-        print(f"\n🔍 Query: {args.query}")
-        results = query_knowledge_base(args.query, index, top_k=args.topk)
-        print(f"\nTop {args.topk} kết quả:")
-        for i, r in enumerate(results, 1):
-            print(f"\n[{i}] Score: {r['score']} | Source: {r['source']}")
-            print(f"    {r['text'][:200]}...")
+        if args.pdf:
+            result = process_pdf(args.pdf, index)
+            print(f"\nKet qua: {result}")
+
+        elif args.dir:
+            results = process_directory(args.dir, index)
+            print(f"\nTong ket:")
+            for r in results:
+                print(f"  {r.get('filename', '?')}: {r['status']} ({r.get('chunk_count', 0)} chunks)")
+
+        elif args.query:
+            print(f"\nQuery: {args.query}")
+            results = query_knowledge_base(args.query, index, top_k=args.topk)
+            print(f"\nTop {args.topk} ket qua:")
+            for i, r in enumerate(results, 1):
+                print(f"\n[{i}] Score: {r['score']} | Source: {r['source']}")
+                print(f"    {r['text'][:200]}...")
