@@ -4,7 +4,6 @@ import com.nhom2.common.*
 import com.nhom2.models.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
-import java.math.BigDecimal
 import java.time.LocalDate
 
 object DashboardService {
@@ -66,7 +65,7 @@ object DashboardService {
         }
     }
 
-    private fun calculateRevenue(startDate: LocalDate, endDate: LocalDate): BigDecimal {
+    private fun calculateRevenue(startDate: LocalDate, endDate: LocalDate): Int {
         return transaction {
             val appointments = (Appointments innerJoin Services).select {
                 (Appointments.status eq "completed") and
@@ -75,7 +74,7 @@ object DashboardService {
                 (Appointments.serviceId.isNotNull())
             }
 
-            appointments.fold(BigDecimal.ZERO) { acc, row ->
+            appointments.fold(0) { acc, row ->
                 acc + row[Services.price]
             }
         }
@@ -88,15 +87,15 @@ object DashboardService {
         val serviceId = this[Appointments.serviceId]
 
         val patient = Users.select { Users.id eq patientId }.single()
-        val doctor = (Doctors innerJoin Users innerJoin Specialties).select { Doctors.id eq doctorId }.single()
+        val doctor = SupabaseDoctors.select { SupabaseDoctors.id eq doctorId }.single()
         val timeSlot = TimeSlots.select { TimeSlots.id eq timeSlotId }.single()
         val service = serviceId?.let { Services.select { Services.id eq it }.singleOrNull() }
 
         return AppointmentSummaryDTO(
             id = this[Appointments.id].toString(),
             patientName = patient[Users.fullName],
-            doctorName = doctor[Users.fullName],
-            specialtyName = doctor[Specialties.name],
+            doctorName = doctor[SupabaseDoctors.fullName],
+            specialtyName = doctor[SupabaseDoctors.specialty],
             appointmentDate = this[Appointments.appointmentDate].toString(),
             startTime = timeSlot[TimeSlots.startTime].toString(),
             endTime = timeSlot[TimeSlots.endTime].toString(),

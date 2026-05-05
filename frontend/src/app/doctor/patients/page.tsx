@@ -1,27 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { doctorApi } from "@/lib/api/doctor";
-import { Loading } from "@/components/common/Loading";
-import type { DoctorAppointment } from "@/types/doctor";
-import { Users, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import DoctorLayout from "@/components/layout/DoctorLayout";
+import { doctorApi } from "@/lib/doctorApi";
+import { User } from "@/types";
+import { Users, Search, FileText } from "lucide-react";
 
 export default function DoctorPatientsPage() {
-  const [appointments, setAppointments] = useState<DoctorAppointment[]>([]);
-  const [patients, setPatients] = useState<Map<string, DoctorAppointment>>(
-    new Map(),
-  );
-  const [filteredPatients, setFilteredPatients] = useState<DoctorAppointment[]>(
-    [],
-  );
+  const router = useRouter();
+  const [patients, setPatients] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -29,23 +17,10 @@ export default function DoctorPatientsPage() {
     loadPatients();
   }, []);
 
-  useEffect(() => {
-    filterPatients();
-  }, [patients, searchTerm]);
-
   const loadPatients = async () => {
     try {
-      const data = await doctorApi.getAppointments();
-      setAppointments(data);
-
-      // Extract unique patients
-      const uniquePatients = new Map<string, DoctorAppointment>();
-      data.forEach((apt) => {
-        if (!uniquePatients.has(apt.patientId)) {
-          uniquePatients.set(apt.patientId, apt);
-        }
-      });
-      setPatients(uniquePatients);
+      const data = await doctorApi.getMyPatients();
+      setPatients(data);
     } catch (error) {
       console.error("Failed to load patients:", error);
     } finally {
@@ -53,107 +28,146 @@ export default function DoctorPatientsPage() {
     }
   };
 
-  const filterPatients = () => {
-    const patientList = Array.from(patients.values());
-    if (searchTerm) {
-      const filtered = patientList.filter(
-        (patient) =>
-          patient.patientName
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          patient.patientEmail.toLowerCase().includes(searchTerm.toLowerCase()),
-      );
-      setFilteredPatients(filtered);
-    } else {
-      setFilteredPatients(patientList);
-    }
-  };
+  const filteredPatients = patients.filter(
+    (patient) =>
+      patient.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.phone?.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
 
-  const getPatientAppointmentCount = (patientId: string) => {
-    return appointments.filter((apt) => apt.patientId === patientId).length;
+  const viewHealthRecord = (patientId: string) => {
+    router.push(`/doctor/patients/${patientId}`);
   };
-
-  if (loading) {
-    return <Loading />;
-  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Danh sách bệnh nhân</h1>
-        <p className="text-muted-foreground mt-2">
-          Xem danh sách bệnh nhân đã khám
-        </p>
-      </div>
+    <DoctorLayout>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">
+            Danh sách bệnh nhân
+          </h1>
+        </div>
 
-      {/* Search */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Tìm kiếm
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+        {/* Search */}
+        <div className="bg-white rounded-lg shadow p-4">
           <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Tìm theo tên hoặc email..."
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm theo tên, email, số điện thoại..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Patients List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Danh sách bệnh nhân</CardTitle>
-          <CardDescription>
-            Tìm thấy {filteredPatients.length} bệnh nhân
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filteredPatients.length > 0 ? (
-            <div className="space-y-3">
-              {filteredPatients.map((patient) => (
-                <div
-                  key={patient.patientId}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex-1">
-                    <p className="font-semibold text-lg">
-                      {patient.patientName}
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 mt-2 text-sm text-muted-foreground">
-                      <p>📧 {patient.patientEmail}</p>
-                      {patient.patientPhone && <p>📞 {patient.patientPhone}</p>}
-                      <p>
-                        📅 Đã khám:{" "}
-                        {getPatientAppointmentCount(patient.patientId)} lần
-                      </p>
-                    </div>
-                    {patient.patientAllergies && (
-                      <p className="text-sm text-red-600 mt-2">
-                        ⚠️ Dị ứng: {patient.patientAllergies}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">
-                Không tìm thấy bệnh nhân nào
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        {/* Patients List */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-6">
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-gray-600">Đang tải...</p>
+              </div>
+            ) : filteredPatients.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600">
+                  {searchTerm
+                    ? "Không tìm thấy bệnh nhân nào"
+                    : "Chưa có bệnh nhân nào"}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Họ tên
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Số điện thoại
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Trạng thái
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Thao tác
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredPatients.map((patient) => (
+                      <tr key={patient.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-blue-600 font-medium">
+                                {patient.fullName.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {patient.fullName}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {patient.email}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {patient.phone || "-"}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              patient.isActive
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {patient.isActive ? "Hoạt động" : "Không hoạt động"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => viewHealthRecord(patient.id)}
+                            className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            Xem hồ sơ
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Summary */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <Users className="w-5 h-5 text-blue-600 mr-2" />
+            <span className="text-sm text-blue-800">
+              Tổng số bệnh nhân:{" "}
+              <span className="font-semibold">{filteredPatients.length}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </DoctorLayout>
   );
 }

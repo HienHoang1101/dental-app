@@ -80,7 +80,7 @@ fun Route.appointmentRoutes() {
                     }
 
                     // Get doctor ID from user ID
-                    val doctor = com.nhom2.doctors.DoctorService.getDoctorByUserId(userId)
+                    val doctor = com.nhom2.doctors.SupabaseDoctorService.getDoctorByUserId(userId)
                     if (doctor == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse(error = "NOT_FOUND", message = "Doctor profile not found"))
                         return@get
@@ -148,7 +148,7 @@ fun Route.appointmentRoutes() {
                         "admin" -> true
                         "patient" -> appointment.patient.id == userId.toString()
                         "doctor" -> {
-                            val doctor = com.nhom2.doctors.DoctorService.getDoctorByUserId(userId)
+                            val doctor = com.nhom2.doctors.SupabaseDoctorService.getDoctorByUserId(userId)
                             doctor?.id == appointment.doctor.id
                         }
                         else -> false

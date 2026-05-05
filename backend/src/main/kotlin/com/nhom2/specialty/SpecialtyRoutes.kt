@@ -88,7 +88,13 @@ fun Route.specialtyRoutes() {
                     } else {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse(error = "NOT_FOUND", message = "Specialty not found"))
                     }
+                } catch (e: IllegalArgumentException) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse(error = "VALIDATION_ERROR", message = e.message ?: "Invalid request")
+                    )
                 } catch (e: Exception) {
+                    e.printStackTrace() // Log the full stack trace for debugging
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         ErrorResponse(error = "UPDATE_FAILED", message = e.message ?: "Failed to update specialty")

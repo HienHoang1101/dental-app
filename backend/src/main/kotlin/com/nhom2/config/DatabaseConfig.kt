@@ -8,17 +8,15 @@ import com.nhom2.models.*
 
 object DatabaseConfig {
     fun init() {
-        // Load .env safely — some .env files may contain duplicate keys which the dotenv library
-        // throws on. Fall back to System.getenv if dotenv fails.
+        // Load .env safely
         val dot = try {
             dotenv { ignoreIfMissing = true }
         } catch (t: Throwable) {
+            println("⚠️ Warning: Failed to load .env file: ${t.message}")
             null
         }
 
-        // If dotenv failed (e.g. malformed .env), try a simple fallback parser that tolerates
-        // duplicate keys by taking the last occurrence. This allows local .env files with
-        // duplicate lines to still be used during tests.
+        // Fallback parser for duplicate keys
         val fallbackMap: Map<String, String> = run {
             try {
                 val f = java.io.File(".env")
@@ -33,6 +31,7 @@ object DatabaseConfig {
                     }
                     .fold(mutableMapOf<String, String>()) { acc, (k, v) -> acc.apply { this[k] = v } }
             } catch (t: Throwable) {
+                println("⚠️ Warning: Failed to parse .env file: ${t.message}")
                 emptyMap<String, String>()
             }
         }
@@ -41,41 +40,61 @@ object DatabaseConfig {
 
         val dbUrl = envGet("DATABASE_URL") ?: error("DATABASE_URL is not set")
         val dbUser = envGet("DATABASE_USER") ?: error("DATABASE_USER is not set")
-        val dbPassword = envGet("DATABASE_PASSWORD") ?: error("DATABASE_PASSWORD is not set")
+        val dbPassword = envGet("DATABASE_PASSWORD") ?: ""
         
         // DEBUG: Print connection info
         println("🔗 Connecting to: $dbUrl")
         println("👤 User: $dbUser")
 
+        // Auto-detect driver based on URL
+        val driver = when {
+            dbUrl.contains("h2") -> "org.h2.Driver"
+            dbUrl.contains("postgresql") -> "org.postgresql.Driver"
+            else -> "org.postgresql.Driver"
+        }
+        println("🚗 Using driver: $driver")
+
         Database.connect(
             url = dbUrl,
-            driver = "org.postgresql.Driver",
+            driver = driver,
             user = dbUser,
             password = dbPassword
         )
-        println("Database connected successfully")
+        println("✅ Database connected successfully")
 
-        // Create tables automatically in dev/test environments (idempotent)
-        try {
-            // transaction {
-            //     SchemaUtils.create(
-            //         Users,
-            //         HealthRecords,
-            //         Specialties,
-            //         Doctors,
-            //         Services,
-            //         Holidays,
-            //         Shifts,
-            //         WorkSchedules,
-            //         TimeSlots,
-            //         Appointments,
-            //         LeaveRequests,
-            //         Notifications
-            //     )
-            // }
-            println("Database schema ensured successfully")
-        } catch (t: Throwable) {
-            println("Warning: could not create schema automatically: ${t.message}")
+        // Create tables for H2, skip for PostgreSQL/Supabase
+        if (dbUrl.contains("h2")) {
+            try {
+                transaction {
+                    SchemaUtils.create(
+                        Users,
+                        HealthRecords,
+                        Specialties,
+                        // Doctors, // DEPRECATED: Use SupabaseDoctors instead
+                        Services,
+                        Holidays,
+                        Shifts,
+                        WorkSchedules,
+                        TimeSlots,
+                        Appointments,
+                        LeaveRequests,
+                        Notifications
+                    )
+                }
+                println("✅ H2 database schema created successfully")
+            } catch (t: Throwable) {
+                println("⚠️ Warning: could not create schema: ${t.message}")
+            }
+        } else {
+            // Verify Supabase/PostgreSQL connection
+            try {
+                transaction {
+                    exec("SELECT 1") { }
+                }
+                println("✅ PostgreSQL/Supabase connection verified")
+            } catch (t: Throwable) {
+                println("⚠️ Warning: could not verify database connection: ${t.message}")
+            }
         }
     }
 }

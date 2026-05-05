@@ -2,7 +2,7 @@ package com.nhom2.appointment
 
 import com.nhom2.common.*
 import com.nhom2.models.*
-import com.nhom2.doctors.DoctorService
+import com.nhom2.doctors.SupabaseDoctorService
 import com.nhom2.healthrecord.HealthRecordService
 import com.nhom2.services.ServiceService
 import com.nhom2.notification.NotificationService
@@ -56,16 +56,18 @@ object AppointmentService {
             } get Appointments.id
 
             // Notify doctor
-            val doctorUserId = Doctors.select { Doctors.id eq UUID.fromString(request.doctorId) }
-                .single()[Doctors.userId]
+            val doctorUserId = SupabaseDoctors.select { SupabaseDoctors.id eq UUID.fromString(request.doctorId) }
+                .singleOrNull()?.get(SupabaseDoctors.userId)
             
-            NotificationService.createNotification(CreateNotificationRequest(
-                userId = doctorUserId.toString(),
-                title = "New Appointment",
-                message = "You have a new appointment request",
-                type = "new_appointment",
-                relatedId = id.toString()
-            ))
+            if (doctorUserId != null) {
+                NotificationService.createNotification(CreateNotificationRequest(
+                    userId = doctorUserId.toString(),
+                    title = "New Appointment",
+                    message = "You have a new appointment request",
+                    type = "new_appointment",
+                    relatedId = id.toString()
+                ))
+            }
 
             Result.success(getAppointmentById(id)!!)
         }
@@ -199,7 +201,7 @@ object AppointmentService {
         val serviceId = this[Appointments.serviceId]
 
         val patient = Users.select { Users.id eq patientId }.single().toUserDTO()
-        val doctor = DoctorService.getDoctorSummary(doctorId)!!
+        val doctor = SupabaseDoctorService.getDoctorSummary(doctorId)!!
         val healthRecord = HealthRecordService.getHealthRecordById(healthRecordId)!!
         val timeSlot = TimeSlots.select { TimeSlots.id eq timeSlotId }.single().toTimeSlotDTO()
         val service = serviceId?.let { ServiceService.getServiceById(it) }

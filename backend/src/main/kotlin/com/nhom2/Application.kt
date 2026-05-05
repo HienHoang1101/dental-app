@@ -2,7 +2,7 @@ package com.nhom2
 
 import com.nhom2.config.DatabaseConfig
 import com.nhom2.plugins.*
-import com.nhom2.utils.SeedData
+// import com.nhom2.utils.SeedData // DISABLED: Using Supabase data
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.cors.routing.*
@@ -15,16 +15,15 @@ fun main(args: Array<String>) {
 fun Application.module() {
     DatabaseConfig.init()
 
-    // Seed initial data (only runs once)
-    val shouldSeed = environment.config.propertyOrNull("app.seedData")?.getString()?.toBoolean() ?: false
-    if (shouldSeed) {
-        SeedData.seed()
-    }
-
+    // Seed data disabled - using Supabase data
+    println("📊 Using existing Supabase/PostgreSQL data")
+    
     // CORS — cho phép frontend Next.js gọi API
     install(CORS) {
         allowHost("localhost:3000")
+        allowHost("localhost:3001")
         allowHost("127.0.0.1:3000")
+        allowHost("127.0.0.1:3001")
         allowHeader(HttpHeaders.ContentType)
         allowHeader(HttpHeaders.Authorization)
         allowMethod(HttpMethod.Get)

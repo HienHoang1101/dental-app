@@ -6,12 +6,12 @@ ktor:
     port: 8080
 
 app:
-  seedData: false # Set to true to seed initial data on startup
+  seedData: true # Set to true to seed initial data on startup
 
 postgres:
-  url: "jdbc:postgresql://localhost/default"
-  user: username
-  password: password
+  url: "jdbc:h2:mem:dental_app;DB_CLOSE_DELAY=-1;MODE=PostgreSQL"
+  user: sa
+  password: ""
 
 jwt:
   domain: "https://jwt-provider-domain/"

@@ -2,10 +2,7 @@ package com.nhom2.models
 
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.javatime.*
-<<<<<<< HEAD
 import java.time.Instant
-=======
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
 
 // ── USERS ────────────────────────────────────────
 object Users : Table("users") {
@@ -14,24 +11,14 @@ object Users : Table("users") {
     val passwordHash = text("password_hash").nullable()
     val fullName     = text("full_name")
     val phone        = text("phone").nullable()
-<<<<<<< HEAD
     val role         = text("role").default("patient") // patient, doctor, admin
     val isActive     = bool("is_active").default(true)
     val createdAt    = timestamp("created_at").clientDefault { Instant.now() }
     val updatedAt    = timestamp("updated_at").clientDefault { Instant.now() }
-=======
-    val role         = text("role").default("patient")
-    val isActive     = bool("is_active").default(true)
-    // Do not set defaultExpression here to avoid Exposed type mismatches across versions.
-    // The database can provide defaults (e.g. DEFAULT now()) or application can set values on insert/update.
-    val createdAt    = timestampWithTimeZone("created_at")
-    val updatedAt    = timestampWithTimeZone("updated_at")
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
 
     override val primaryKey = PrimaryKey(id)
 }
 
-<<<<<<< HEAD
 // ── HEALTH RECORDS (Patient Profiles) ────────────
 object HealthRecords : Table("health_records") {
     val id             = uuid("id").autoGenerate()
@@ -67,6 +54,9 @@ object Specialties : Table("specialties") {
 }
 
 // ── DOCTORS ──────────────────────────────────────
+// DEPRECATED: Use SupabaseDoctors instead (defined in SupabaseTables.kt)
+// This table definition doesn't match the actual Supabase schema
+/*
 object Doctors : Table("doctors") {
     val id            = uuid("id").autoGenerate()
     val userId        = uuid("user_id").uniqueIndex().references(Users.id)
@@ -80,18 +70,18 @@ object Doctors : Table("doctors") {
 
     override val primaryKey = PrimaryKey(id)
 }
+*/
 
 // ── SERVICES ─────────────────────────────────────
 object Services : Table("services") {
     val id          = uuid("id").autoGenerate()
     val name        = text("name")
     val description = text("description").nullable()
-    val price       = decimal("price", 10, 2)
-    val duration    = integer("duration") // minutes
+    val price       = integer("price") // stored as integer in Supabase
+    val duration    = integer("duration_minutes") // column name in Supabase
     val category    = text("category").nullable()
     val isActive    = bool("is_active").default(true)
     val createdAt   = timestamp("created_at").clientDefault { Instant.now() }
-    val updatedAt   = timestamp("updated_at").clientDefault { Instant.now() }
 
     override val primaryKey = PrimaryKey(id)
 }
@@ -121,7 +111,7 @@ object Shifts : Table("shifts") {
 // ── WORK SCHEDULES ───────────────────────────────
 object WorkSchedules : Table("work_schedules") {
     val id                 = uuid("id").autoGenerate()
-    val doctorId           = uuid("doctor_id").references(Doctors.id)
+    val doctorId           = uuid("doctor_id").references(SupabaseDoctors.id)
     val shiftId            = uuid("shift_id").references(Shifts.id)
     val date               = date("date")
     val slotDuration       = integer("slot_duration").default(30) // minutes
@@ -150,7 +140,7 @@ object TimeSlots : Table("time_slots") {
 object Appointments : Table("appointments") {
     val id              = uuid("id").autoGenerate()
     val patientId       = uuid("patient_id").references(Users.id)
-    val doctorId        = uuid("doctor_id").references(Doctors.id)
+    val doctorId        = uuid("doctor_id").references(SupabaseDoctors.id)
     val healthRecordId  = uuid("health_record_id").references(HealthRecords.id)
     val timeSlotId      = uuid("time_slot_id").references(TimeSlots.id)
     val serviceId       = uuid("service_id").references(Services.id).nullable()
@@ -167,7 +157,7 @@ object Appointments : Table("appointments") {
 // ── LEAVE REQUESTS ───────────────────────────────
 object LeaveRequests : Table("leave_requests") {
     val id          = uuid("id").autoGenerate()
-    val doctorId    = uuid("doctor_id").references(Doctors.id)
+    val doctorId    = uuid("doctor_id").references(SupabaseDoctors.id)
     val startDate   = date("start_date")
     val endDate     = date("end_date")
     val reason      = text("reason")
@@ -189,18 +179,6 @@ object Notifications : Table("notifications") {
     val isRead    = bool("is_read").default(false)
     val relatedId = uuid("related_id").nullable() // appointment_id, etc.
     val createdAt = timestamp("created_at").clientDefault { Instant.now() }
-=======
-// ── PATIENT PROFILES ─────────────────────────────
-object PatientProfiles : Table("patient_profiles") {
-    val id             = uuid("id").autoGenerate()
-    val userId         = uuid("user_id").uniqueIndex()
-                            .references(Users.id)
-    val dateOfBirth    = date("date_of_birth").nullable()
-    val gender         = text("gender").nullable()
-    val allergyNotes   = text("allergy_notes").nullable()
-    val medicalHistory = text("medical_history").nullable()
-    val updatedAt      = timestampWithTimeZone("updated_at")
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
 
     override val primaryKey = PrimaryKey(id)
 }

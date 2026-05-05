@@ -2,8 +2,9 @@ package com.nhom2.admin
 
 import com.nhom2.common.*
 import com.nhom2.models.*
-import com.nhom2.doctors.DoctorService
+import com.nhom2.doctors.SupabaseDoctorService
 import com.nhom2.appointment.AppointmentService
+import com.nhom2.utils.PasswordHasher
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -12,9 +13,10 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.time.Instant
 import java.util.UUID
-
 fun Route.adminApiRoutes() {
     route("/admin") {
         authenticate {
@@ -32,15 +34,316 @@ fun Route.adminApiRoutes() {
                 }
             }
 
-            // Get all doctors
-            get("/doctors") {
+            // Dashboard stats
+            get("/dashboard/stats") {
                 try {
-                    val doctors = DoctorService.getAllDoctors(activeOnly = false)
-                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = doctors))
+                    val stats = transaction {
+                        val totalPatients = Users.select { Users.role eq "patient" }.count()
+                        val totalDoctors = Users.select { Users.role eq "doctor" }.count()
+                        val totalAppointments = Appointments.selectAll().count()
+                        val pendingAppointments = Appointments.select { Appointments.status eq "pending" }.count()
+                        val confirmedAppointments = Appointments.select { Appointments.status eq "confirmed" }.count()
+                        val completedAppointments = Appointments.select { Appointments.status eq "completed" }.count()
+                        val cancelledAppointments = Appointments.select { Appointments.status eq "cancelled" }.count()
+
+                        mapOf(
+                            "totalPatients" to totalPatients,
+                            "totalDoctors" to totalDoctors,
+                            "totalAppointments" to totalAppointments,
+                            "pendingAppointments" to pendingAppointments,
+                            "confirmedAppointments" to confirmedAppointments,
+                            "completedAppointments" to completedAppointments,
+                            "cancelledAppointments" to cancelledAppointments
+                        )
+                    }
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = stats))
                 } catch (e: Exception) {
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
+                    )
+                }
+            }
+
+            // Get all doctors
+            get("/doctors") {
+                try {
+                    val doctors = SupabaseDoctorService.getAllDoctors(activeOnly = false)
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = doctors))
+                } catch (e: Exception) {
+                    e.printStackTrace() // Log the full stack trace
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "SERVER_ERROR", message = "Failed to fetch doctors: ${e.message}")
+                    )
+                }
+            }
+
+            // Get doctor by ID
+            get("/doctors/{id}") {
+                try {
+                    val id = UUID.fromString(call.parameters["id"])
+                    val doctor = SupabaseDoctorService.getDoctorById(id)
+                    
+                    if (doctor != null) {
+                        call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = doctor))
+                    } else {
+                        call.respond(
+                            HttpStatusCode.NotFound,
+                            ErrorResponse(error = "NOT_FOUND", message = "Doctor not found")
+                        )
+                    }
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
+                    )
+                }
+            }
+
+            // Create doctor (creates both user and doctor profile)
+            post("/doctors") {
+                try {
+                    val request = call.receive<CreateDoctorWithUserRequest>()
+                    
+                    // Check if email already exists
+                    val emailExists = transaction {
+                        Users.select { Users.email eq request.email }.count() > 0
+                    }
+                    
+                    if (emailExists) {
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ErrorResponse(error = "EMAIL_EXISTS", message = "Email đã tồn tại trong hệ thống")
+                        )
+                        return@post
+                    }
+                    
+                    // Create user first
+                    val userId = transaction {
+                        Users.insert {
+                            it[email] = request.email
+                            it[passwordHash] = PasswordHasher.hash(request.password)
+                            it[fullName] = request.fullName
+                            it[phone] = request.phone
+                            it[role] = "doctor"
+                            it[isActive] = true
+                            it[createdAt] = Instant.now()
+                            it[updatedAt] = Instant.now()
+                        } get Users.id
+                    }
+                    
+                    // Create doctor profile
+                    val doctorRequest = CreateSupabaseDoctorRequest(
+                        userId = userId.toString(),
+                        fullName = request.fullName,
+                        specialty = request.specialty,
+                        degree = request.degree,
+                        bio = request.bio,
+                        avatarUrl = request.avatarUrl
+                    )
+                    
+                    val doctor = SupabaseDoctorService.createDoctor(doctorRequest)
+                    call.respond(HttpStatusCode.Created, ApiResponse(success = true, data = doctor))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "CREATE_FAILED", message = "Tạo bác sĩ thất bại: ${e.message}")
+                    )
+                }
+            }
+
+            // Update doctor
+            put("/doctors/{id}") {
+                try {
+                    val id = UUID.fromString(call.parameters["id"])
+                    val request = call.receive<UpdateSupabaseDoctorRequest>()
+                    val doctor = SupabaseDoctorService.updateDoctor(id, request)
+                    
+                    if (doctor != null) {
+                        call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = doctor))
+                    } else {
+                        call.respond(
+                            HttpStatusCode.NotFound,
+                            ErrorResponse(error = "NOT_FOUND", message = "Doctor not found")
+                        )
+                    }
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "UPDATE_FAILED", message = e.message ?: "Failed to update doctor")
+                    )
+                }
+            }
+
+            // Delete doctor
+            delete("/doctors/{id}") {
+                try {
+                    val id = UUID.fromString(call.parameters["id"])
+                    val deleted = SupabaseDoctorService.deleteDoctor(id)
+                    
+                    if (deleted) {
+                        call.respond(HttpStatusCode.OK, ApiResponse<Unit>(success = true, message = "Doctor deleted successfully"))
+                    } else {
+                        call.respond(
+                            HttpStatusCode.NotFound,
+                            ErrorResponse(error = "NOT_FOUND", message = "Doctor not found")
+                        )
+                    }
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "DELETE_FAILED", message = e.message ?: "Failed to delete doctor")
+                    )
+                }
+            }
+
+            // Get all users
+            get("/users") {
+                try {
+                    val users = transaction {
+                        Users.selectAll()
+                            .orderBy(Users.createdAt to SortOrder.DESC)
+                            .map { row ->
+                                mapOf(
+                                    "id" to row[Users.id].toString(),
+                                    "email" to row[Users.email],
+                                    "fullName" to row[Users.fullName],
+                                    "phone" to row[Users.phone],
+                                    "role" to row[Users.role],
+                                    "isActive" to row[Users.isActive],
+                                    "createdAt" to row[Users.createdAt].toString(),
+                                    "updatedAt" to row[Users.updatedAt].toString()
+                                )
+                            }
+                    }
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = users))
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
+                    )
+                }
+            }
+
+            // Create user
+            post("/users") {
+                try {
+                    val request = call.receive<CreateUserRequest>()
+                    
+                    // Check if email already exists
+                    val exists = transaction {
+                        Users.select { Users.email eq request.email }.count() > 0
+                    }
+                    
+                    if (exists) {
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ErrorResponse(error = "EMAIL_EXISTS", message = "Email already exists")
+                        )
+                        return@post
+                    }
+
+                    val user = transaction {
+                        val userId = Users.insert {
+                            it[email] = request.email
+                            it[passwordHash] = PasswordHasher.hash(request.password)
+                            it[fullName] = request.fullName
+                            it[phone] = request.phone
+                            it[role] = request.role
+                            it[isActive] = true
+                            it[createdAt] = Instant.now()
+                            it[updatedAt] = Instant.now()
+                        } get Users.id
+
+                        mapOf(
+                            "id" to userId.toString(),
+                            "email" to request.email,
+                            "fullName" to request.fullName,
+                            "phone" to request.phone,
+                            "role" to request.role,
+                            "isActive" to true
+                        )
+                    }
+                    
+                    call.respond(HttpStatusCode.Created, ApiResponse(success = true, data = user))
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "CREATE_FAILED", message = e.message ?: "Failed to create user")
+                    )
+                }
+            }
+
+            // Update user
+            put("/users/{id}") {
+                try {
+                    val id = UUID.fromString(call.parameters["id"])
+                    val request = call.receive<UpdateUserRequest>()
+                    
+                    val user = transaction {
+                        val exists = Users.select { Users.id eq id }.count() > 0
+                        if (!exists) return@transaction null
+
+                        Users.update({ Users.id eq id }) {
+                            request.fullName?.let { name -> it[fullName] = name }
+                            request.phone?.let { phoneNum -> it[phone] = phoneNum }
+                            request.isActive?.let { active -> it[isActive] = active }
+                            it[updatedAt] = Instant.now()
+                        }
+
+                        Users.select { Users.id eq id }.single().let { row ->
+                            mapOf(
+                                "id" to row[Users.id].toString(),
+                                "email" to row[Users.email],
+                                "fullName" to row[Users.fullName],
+                                "phone" to row[Users.phone],
+                                "role" to row[Users.role],
+                                "isActive" to row[Users.isActive],
+                                "createdAt" to row[Users.createdAt].toString(),
+                                "updatedAt" to row[Users.updatedAt].toString()
+                            )
+                        }
+                    }
+                    
+                    if (user != null) {
+                        call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = user))
+                    } else {
+                        call.respond(
+                            HttpStatusCode.NotFound,
+                            ErrorResponse(error = "NOT_FOUND", message = "User not found")
+                        )
+                    }
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "UPDATE_FAILED", message = e.message ?: "Failed to update user")
+                    )
+                }
+            }
+
+            // Delete user
+            delete("/users/{id}") {
+                try {
+                    val id = UUID.fromString(call.parameters["id"])
+                    
+                    val deleted = transaction {
+                        Users.deleteWhere { Users.id eq id } > 0
+                    }
+                    
+                    if (deleted) {
+                        call.respond(HttpStatusCode.OK, ApiResponse<Unit>(success = true, message = "User deleted successfully"))
+                    } else {
+                        call.respond(
+                            HttpStatusCode.NotFound,
+                            ErrorResponse(error = "NOT_FOUND", message = "User not found")
+                        )
+                    }
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "DELETE_FAILED", message = e.message ?: "Failed to delete user")
                     )
                 }
             }
@@ -52,28 +355,30 @@ fun Route.adminApiRoutes() {
                         Users.select { Users.role eq "patient" }
                             .map { row ->
                                 val userId = row[Users.id]
-                                val healthRecord = HealthRecords.select { HealthRecords.userId eq userId }
+                                val patientProfile = PatientProfiles.select { PatientProfiles.userId eq userId }
                                     .singleOrNull()
                                 
-                                mapOf(
-                                    "id" to userId.toString(),
-                                    "name" to row[Users.fullName],
-                                    "email" to row[Users.email],
-                                    "phone" to row[Users.phone],
-                                    "isActive" to row[Users.isActive],
-                                    "createdAt" to row[Users.createdAt].toString(),
-                                    "dateOfBirth" to healthRecord?.get(HealthRecords.dateOfBirth)?.toString(),
-                                    "gender" to healthRecord?.get(HealthRecords.gender),
-                                    "allergies" to healthRecord?.get(HealthRecords.allergyNotes)
+                                PatientDTO(
+                                    id = userId.toString(),
+                                    name = row[Users.fullName],
+                                    email = row[Users.email],
+                                    phone = row[Users.phone],
+                                    isActive = row[Users.isActive],
+                                    createdAt = row[Users.createdAt].toString(),
+                                    dateOfBirth = patientProfile?.get(PatientProfiles.dateOfBirth)?.toString(),
+                                    gender = patientProfile?.get(PatientProfiles.gender),
+                                    allergies = patientProfile?.get(PatientProfiles.allergyNotes)
                                 )
                             }
                     }
                     
-                    call.respond(
-                        HttpStatusCode.OK,
-                        ApiResponse(success = true, data = mapOf("patients" to patients, "total" to patients.size))
+                    val response = PatientListResponse(
+                        patients = patients,
+                        total = patients.size
                     )
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = response))
                 } catch (e: Exception) {
+                    e.printStackTrace()
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
@@ -160,21 +465,20 @@ fun Route.adminApiRoutes() {
                         val user = Users.select { Users.id eq id }.singleOrNull()
                             ?: return@transaction null
                         
-                        val healthRecord = HealthRecords.select { HealthRecords.userId eq id }
+                        val patientProfile = PatientProfiles.select { PatientProfiles.userId eq id }
                             .singleOrNull()
                         
-                        mapOf(
-                            "id" to user[Users.id].toString(),
-                            "name" to user[Users.fullName],
-                            "email" to user[Users.email],
-                            "phone" to user[Users.phone],
-                            "isActive" to user[Users.isActive],
-                            "createdAt" to user[Users.createdAt].toString(),
-                            "dateOfBirth" to healthRecord?.get(HealthRecords.dateOfBirth)?.toString(),
-                            "gender" to healthRecord?.get(HealthRecords.gender),
-                            "address" to healthRecord?.get(HealthRecords.address),
-                            "allergies" to healthRecord?.get(HealthRecords.allergyNotes),
-                            "medicalHistory" to healthRecord?.get(HealthRecords.medicalHistory)
+                        PatientDTO(
+                            id = user[Users.id].toString(),
+                            name = user[Users.fullName],
+                            email = user[Users.email],
+                            phone = user[Users.phone],
+                            isActive = user[Users.isActive],
+                            createdAt = user[Users.createdAt].toString(),
+                            dateOfBirth = patientProfile?.get(PatientProfiles.dateOfBirth)?.toString(),
+                            gender = patientProfile?.get(PatientProfiles.gender),
+                            allergies = patientProfile?.get(PatientProfiles.allergyNotes),
+                            medicalHistory = patientProfile?.get(PatientProfiles.medicalHistory)
                         )
                     }
                     
@@ -187,6 +491,7 @@ fun Route.adminApiRoutes() {
                         )
                     }
                 } catch (e: Exception) {
+                    e.printStackTrace()
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
@@ -208,6 +513,48 @@ fun Route.adminApiRoutes() {
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
+                    )
+                }
+            }
+
+            // Utility: Migrate doctor users to doctor profiles
+            post("/migrate-doctors") {
+                try {
+                    val result = com.nhom2.utils.MigrateDoctors.createMissingDoctorProfiles()
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = result))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "MIGRATION_FAILED", message = "Migration failed: ${e.message}")
+                    )
+                }
+            }
+
+            // Utility: Check database structure
+            get("/check-database") {
+                try {
+                    val result = com.nhom2.utils.SimpleMigration.checkDatabaseStructure()
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = result))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "CHECK_FAILED", message = "Check failed: ${e.message}")
+                    )
+                }
+            }
+
+            // Utility: Create default specialty
+            post("/create-default-specialty") {
+                try {
+                    val result = com.nhom2.utils.SimpleMigration.createDefaultSpecialty()
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = result))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "CREATE_FAILED", message = "Create failed: ${e.message}")
                     )
                 }
             }

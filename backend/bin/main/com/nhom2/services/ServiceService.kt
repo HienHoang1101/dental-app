@@ -5,7 +5,6 @@ import com.nhom2.models.Services
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
-import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
 
@@ -16,12 +15,11 @@ object ServiceService {
             val id = Services.insert {
                 it[name] = request.name
                 it[description] = request.description
-                it[price] = BigDecimal(request.price)
+                it[price] = request.price
                 it[duration] = request.duration
                 it[category] = request.category
                 it[isActive] = true
                 it[createdAt] = Instant.now()
-                it[updatedAt] = Instant.now()
             } get Services.id
 
             getServiceById(id)!!
@@ -56,11 +54,10 @@ object ServiceService {
             Services.update({ Services.id eq id }) {
                 request.name?.let { v -> it[name] = v }
                 request.description?.let { v -> it[description] = v }
-                request.price?.let { v -> it[price] = BigDecimal(v) }
+                request.price?.let { v -> it[price] = v }
                 request.duration?.let { v -> it[duration] = v }
                 request.category?.let { v -> it[category] = v }
                 request.isActive?.let { v -> it[isActive] = v }
-                it[updatedAt] = Instant.now()
             }
 
             getServiceById(id)
@@ -82,6 +79,6 @@ object ServiceService {
         category = this[Services.category],
         isActive = this[Services.isActive],
         createdAt = this[Services.createdAt].toString(),
-        updatedAt = this[Services.updatedAt].toString()
+        updatedAt = null // Supabase doesn't have updated_at column
     )
 }

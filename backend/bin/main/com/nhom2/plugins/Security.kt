@@ -7,7 +7,6 @@ import io.ktor.server.auth.jwt.*
 
 fun Application.configureSecurity() {
     install(Authentication) {
-<<<<<<< HEAD
         jwt {  // Default authentication (no name)
             verifier(
                 com.auth0.jwt.JWT
@@ -25,9 +24,6 @@ fun Application.configureSecurity() {
         }
         
         jwt("auth-jwt") {  // Named authentication (for backward compatibility)
-=======
-        jwt("auth-jwt") {
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
             verifier(
                 com.auth0.jwt.JWT
                     .require(JwtConfig.algorithm)

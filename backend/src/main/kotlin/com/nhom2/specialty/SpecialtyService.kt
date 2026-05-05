@@ -2,7 +2,7 @@ package com.nhom2.specialty
 
 import com.nhom2.common.*
 import com.nhom2.models.Specialties
-import com.nhom2.models.Doctors
+import com.nhom2.models.SupabaseDoctors
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -50,6 +50,17 @@ object SpecialtyService {
             val exists = Specialties.select { Specialties.id eq id }.count() > 0
             if (!exists) return@transaction null
 
+            // Check if name is being updated and if it conflicts with another specialty
+            request.name?.let { newName ->
+                val nameConflict = Specialties.select { 
+                    (Specialties.name eq newName) and (Specialties.id neq id) 
+                }.count() > 0
+                
+                if (nameConflict) {
+                    throw IllegalArgumentException("A specialty with the name '$newName' already exists")
+                }
+            }
+
             Specialties.update({ Specialties.id eq id }) {
                 request.name?.let { v -> it[name] = v }
                 request.description?.let { v -> it[description] = v }
@@ -69,11 +80,19 @@ object SpecialtyService {
 
     private fun ResultRow.toSpecialtyDTO(): SpecialtyDTO {
         val specialtyId = this[Specialties.id]
-        val doctorCount = Doctors.select { Doctors.specialtyId eq specialtyId }.count().toInt()
+        val specialtyName = this[Specialties.name]
+        
+        // Count doctors with this specialty (using text match in Supabase structure)
+        val doctorCount = try {
+            SupabaseDoctors.select { SupabaseDoctors.specialty eq specialtyName }.count().toInt()
+        } catch (e: Exception) {
+            println("Warning: Failed to count doctors for specialty '$specialtyName': ${e.message}")
+            0
+        }
         
         return SpecialtyDTO(
             id = specialtyId.toString(),
-            name = this[Specialties.name],
+            name = specialtyName,
             description = this[Specialties.description],
             isActive = this[Specialties.isActive],
             doctorCount = doctorCount,

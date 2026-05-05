@@ -1,264 +1,249 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { useAuthStore } from "@/store/authStore";
-import { doctorApi } from "@/lib/api/doctor";
-import { ROUTES } from "@/lib/constants/routes";
-import { Loading } from "@/components/common/Loading";
-import type { DoctorDashboardStats, DoctorAppointment } from "@/types/doctor";
-import { Calendar, Clock, Users, CheckCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import DoctorLayout from "@/components/layout/DoctorLayout";
+import { doctorApi } from "@/lib/doctorApi";
+import { Appointment } from "@/types";
+import { Calendar, Clock, User, CheckCircle, XCircle } from "lucide-react";
 
 export default function DoctorDashboard() {
-  const { user } = useAuthStore();
-  const [stats, setStats] = useState<DoctorDashboardStats | null>(null);
-  const [todayAppointments, setTodayAppointments] = useState<
-    DoctorAppointment[]
-  >([]);
+  const router = useRouter();
+  const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
+  const [stats, setStats] = useState({
+    today: 0,
+    pending: 0,
+    confirmed: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadDashboardData();
+    loadData();
   }, []);
 
-  const loadDashboardData = async () => {
+  const loadData = async () => {
     try {
-      const [statsData, appointmentsData] = await Promise.all([
-        doctorApi.getDashboardStats(),
-        doctorApi.getTodaySchedule(),
-      ]);
-      setStats(statsData);
-      setTodayAppointments(appointmentsData);
+      const today = new Date().toISOString().split("T")[0];
+      const response = await doctorApi.getMyAppointments({
+        startDate: today,
+        endDate: today,
+        page: 1,
+        pageSize: 20,
+      });
+
+      setTodayAppointments(response.items);
+
+      // Calculate stats
+      const pending = response.items.filter(
+        (apt) => apt.status === "pending",
+      ).length;
+      const confirmed = response.items.filter(
+        (apt) => apt.status === "confirmed",
+      ).length;
+
+      setStats({
+        today: response.items.length,
+        pending,
+        confirmed,
+      });
     } catch (error) {
-      console.error("Failed to load dashboard data:", error);
+      console.error("Failed to load data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const variants: Record<
-      string,
-      "default" | "secondary" | "destructive" | "outline"
-    > = {
-      pending: "secondary",
-      confirmed: "default",
-      completed: "outline",
-      cancelled: "destructive",
-    };
-    const labels: Record<string, string> = {
-      pending: "Chờ xác nhận",
-      confirmed: "Đã xác nhận",
-      completed: "Hoàn thành",
-      cancelled: "Đã hủy",
-    };
-    return (
-      <Badge variant={variants[status] || "default"}>
-        {labels[status] || status}
-      </Badge>
-    );
+  const handleConfirm = async (id: string) => {
+    if (!confirm("Xác nhận lịch hẹn này?")) return;
+
+    try {
+      await doctorApi.confirmAppointment(id);
+      loadData();
+    } catch (error) {
+      alert("Không thể xác nhận lịch hẹn");
+    }
   };
 
-  if (loading) {
-    return <Loading />;
-  }
+  const handleCancel = async (id: string) => {
+    const reason = prompt("Lý do hủy:");
+    if (!reason) return;
+
+    try {
+      await doctorApi.cancelAppointment(id, reason);
+      loadData();
+    } catch (error) {
+      alert("Không thể hủy lịch hẹn");
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "confirmed":
+        return "bg-green-100 text-green-800";
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "completed":
+        return "bg-blue-100 text-blue-800";
+      case "cancelled":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "confirmed":
+        return "Đã xác nhận";
+      case "pending":
+        return "Chờ xác nhận";
+      case "completed":
+        return "Đã khám";
+      case "cancelled":
+        return "Đã hủy";
+      default:
+        return status;
+    }
+  };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">Xin chào, BS. {user?.fullName}!</h1>
-        <p className="text-muted-foreground mt-2">
-          Chào mừng bạn đến với hệ thống quản lý phòng khám
-        </p>
-      </div>
+    <DoctorLayout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-gray-600 mt-1">
+            Chào mừng bạn quay trở lại, Bác sĩ!
+          </p>
+        </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Lịch hẹn hôm nay
-            </CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {stats?.todayAppointments || 0}
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Lịch hẹn hôm nay</p>
+                <p className="text-3xl font-bold mt-1">{stats.today}</p>
+              </div>
+              <div className="bg-blue-100 p-3 rounded-lg">
+                <Calendar className="w-6 h-6 text-blue-600" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Tổng số lịch hẹn trong ngày
-            </p>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sắp tới</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {stats?.upcomingAppointments || 0}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Chờ xác nhận</p>
+                <p className="text-3xl font-bold mt-1">{stats.pending}</p>
+              </div>
+              <div className="bg-yellow-100 p-3 rounded-lg">
+                <Clock className="w-6 h-6 text-yellow-600" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Lịch hẹn trong tuần
-            </p>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Hoàn thành</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {stats?.completedToday || 0}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Đã xác nhận</p>
+                <p className="text-3xl font-bold mt-1">{stats.confirmed}</p>
+              </div>
+              <div className="bg-green-100 p-3 rounded-lg">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Đã khám hôm nay
-            </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Tổng bệnh nhân
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {stats?.totalPatients || 0}
+        {/* Today's Appointments */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-6 border-b">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Lịch hẹn hôm nay</h2>
+              <button
+                onClick={() => router.push("/doctor/appointments")}
+                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+              >
+                Xem tất cả →
+              </button>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Bệnh nhân đã khám
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      {/* Quick Actions */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>📅 Lịch hẹn</CardTitle>
-            <CardDescription>Xem và quản lý lịch hẹn của bạn</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href={ROUTES.DOCTOR_APPOINTMENTS}>
-              <Button className="w-full">Xem lịch hẹn</Button>
-            </Link>
-          </CardContent>
-        </Card>
+          <div className="p-6">
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-gray-600">Đang tải...</p>
+              </div>
+            ) : todayAppointments.length === 0 ? (
+              <div className="text-center py-8">
+                <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600">Không có lịch hẹn nào hôm nay</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {todayAppointments.map((appointment) => (
+                  <div
+                    key={appointment.id}
+                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}
+                          >
+                            {getStatusText(appointment.status)}
+                          </span>
+                        </div>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex items-center space-x-2">
+                            <User className="w-4 h-4 text-gray-400" />
+                            <span className="font-medium">
+                              {appointment.patient.fullName}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Clock className="w-4 h-4 text-gray-400" />
+                            <span>
+                              {appointment.timeSlot.startTime} -{" "}
+                              {appointment.timeSlot.endTime}
+                            </span>
+                          </div>
+                          {appointment.notes && (
+                            <p className="text-gray-600 mt-2">
+                              Ghi chú: {appointment.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>🗓️ Lịch làm việc</CardTitle>
-            <CardDescription>Xem lịch làm việc của bạn</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href={ROUTES.DOCTOR_SCHEDULE}>
-              <Button className="w-full" variant="outline">
-                Xem lịch
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>🏖️ Đơn xin nghỉ</CardTitle>
-            <CardDescription>Quản lý đơn xin nghỉ</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href={ROUTES.DOCTOR_LEAVE_REQUESTS}>
-              <Button className="w-full" variant="outline">
-                Xem đơn
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Today's Appointments */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lịch hẹn hôm nay</CardTitle>
-          <CardDescription>
-            {todayAppointments.length > 0
-              ? `Bạn có ${todayAppointments.length} lịch hẹn trong ngày`
-              : "Không có lịch hẹn nào hôm nay"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {todayAppointments.length > 0 ? (
-            <div className="space-y-4">
-              {todayAppointments.map((appointment) => (
-                <div
-                  key={appointment.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <p className="font-semibold text-lg">
-                        {appointment.patient.fullName}
-                      </p>
-                      {getStatusBadge(appointment.status)}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                      <p>
-                        ⏰ {appointment.timeSlot.startTime} -{" "}
-                        {appointment.timeSlot.endTime}
-                      </p>
-                      <p>
-                        🦷 {appointment.service?.name || "Không có dịch vụ"}
-                      </p>
-                      {appointment.notes && (
-                        <p className="col-span-2">
-                          📝 Ghi chú: {appointment.notes}
-                        </p>
-                      )}
-                      {appointment.healthRecord.allergyNotes && (
-                        <p className="col-span-2 text-red-600">
-                          ⚠️ Dị ứng: {appointment.healthRecord.allergyNotes}
-                        </p>
+                      {appointment.status === "pending" && (
+                        <div className="flex space-x-2 ml-4">
+                          <button
+                            onClick={() => handleConfirm(appointment.id)}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+                            title="Xác nhận"
+                          >
+                            <CheckCircle className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handleCancel(appointment.id)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                            title="Hủy"
+                          >
+                            <XCircle className="w-5 h-5" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
-                  <Link
-                    href={`${ROUTES.DOCTOR_APPOINTMENTS}/${appointment.id}`}
-                  >
-                    <Button variant="outline" size="sm">
-                      Chi tiết
-                    </Button>
-                  </Link>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground mb-4">
-                Bạn không có lịch hẹn nào hôm nay
-              </p>
-              <Link href={ROUTES.DOCTOR_SCHEDULE}>
-                <Button variant="outline">Xem lịch làm việc</Button>
-              </Link>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </DoctorLayout>
   );
 }

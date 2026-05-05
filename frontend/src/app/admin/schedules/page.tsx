@@ -1,223 +1,208 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Calendar } from "@/components/common/Calendar";
-import { adminApi } from "@/lib/api/admin";
-import { Loading } from "@/components/common/Loading";
-import type { DoctorProfile, DoctorSchedule } from "@/types/doctor";
-import { Clock, Plus } from "lucide-react";
+import AdminLayout from "@/components/layout/AdminLayout";
+import { adminApi } from "@/lib/adminApi";
 
-export default function AdminSchedulesPage() {
-  const [doctors, setDoctors] = useState<DoctorProfile[]>([]);
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>("");
-  const [schedules, setSchedules] = useState<DoctorSchedule[]>([]);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+export default function SchedulesPage() {
+  const [activeTab, setActiveTab] = useState<
+    "shifts" | "holidays" | "work-schedules"
+  >("shifts");
+  const [shifts, setShifts] = useState<any[]>([]);
+  const [holidays, setHolidays] = useState<any[]>([]);
+  const [workSchedules, setWorkSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadDoctors();
-  }, []);
+    loadData();
+  }, [activeTab]);
 
-  useEffect(() => {
-    if (selectedDoctorId) {
-      loadSchedules();
-    }
-  }, [selectedDoctorId]);
-
-  const loadDoctors = async () => {
+  const loadData = async () => {
+    setLoading(true);
     try {
-      const data = await adminApi.getAllDoctors();
-      setDoctors(data);
-      if (data.length > 0) {
-        setSelectedDoctorId(data[0].id);
+      if (activeTab === "shifts") {
+        const data = await adminApi.getShifts();
+        setShifts(data);
+      } else if (activeTab === "holidays") {
+        const data = await adminApi.getHolidays();
+        setHolidays(data);
+      } else if (activeTab === "work-schedules") {
+        const today = new Date().toISOString().split("T")[0];
+        const data = await adminApi.getWorkSchedules(today);
+        setWorkSchedules(data);
       }
     } catch (error) {
-      console.error("Failed to load doctors:", error);
+      console.error("Failed to load data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadSchedules = async () => {
-    if (!selectedDoctorId) return;
-    try {
-      const data = await adminApi.getDoctorSchedules(selectedDoctorId);
-      setSchedules(data);
-    } catch (error) {
-      console.error("Failed to load schedules:", error);
-    }
-  };
-
-  const getHighlightedDates = () => {
-    return schedules.map((schedule) => schedule.workDate);
-  };
-
-  const getSchedulesForDate = (date: Date) => {
-    const dateStr = date.toISOString().split("T")[0];
-    return schedules.filter((schedule) => schedule.workDate === dateStr);
-  };
-
-  const handleDateSelect = (date: Date) => {
-    setSelectedDate(date);
-  };
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString("vi-VN", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
-  const selectedDoctor = doctors.find((d) => d.id === selectedDoctorId);
-  const daySchedules = getSchedulesForDate(selectedDate);
-
   if (loading) {
-    return <Loading />;
+    return (
+      <AdminLayout>
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        </div>
+      </AdminLayout>
+    );
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Quản lý lịch làm việc</h1>
-          <p className="text-muted-foreground mt-2">
-            Xem và quản lý lịch làm việc của bác sĩ
-          </p>
+    <AdminLayout>
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-gray-900">
+          Quản lý lịch làm việc
+        </h1>
+
+        {/* Tabs */}
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab("shifts")}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === "shifts"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Ca làm việc
+            </button>
+            <button
+              onClick={() => setActiveTab("holidays")}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === "holidays"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Ngày lễ
+            </button>
+            <button
+              onClick={() => setActiveTab("work-schedules")}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === "work-schedules"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Lịch làm việc
+            </button>
+          </nav>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Tạo lịch làm việc
-        </Button>
+
+        {/* Content */}
+        {activeTab === "shifts" && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Tên ca
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Giờ bắt đầu
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Giờ kết thúc
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {shifts.map((shift) => (
+                  <tr key={shift.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {shift.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {shift.startTime}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {shift.endTime}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === "holidays" && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Ngày
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Tên ngày lễ
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Mô tả
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {holidays.map((holiday) => (
+                  <tr key={holiday.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(holiday.date).toLocaleDateString("vi-VN")}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {holiday.name}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {holiday.description}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === "work-schedules" && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Bác sĩ
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Ca làm việc
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Ngày
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Thời gian slot
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {workSchedules.map((schedule) => (
+                  <tr key={schedule.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {schedule.doctor.fullName}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {schedule.shift.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(schedule.date).toLocaleDateString("vi-VN")}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {schedule.slotDuration} phút
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-
-      {/* Doctor Selector */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Chọn bác sĩ</CardTitle>
-          <CardDescription>Chọn bác sĩ để xem lịch làm việc</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Chọn bác sĩ" />
-            </SelectTrigger>
-            <SelectContent>
-              {doctors.map((doctor) => (
-                <SelectItem key={doctor.id} value={doctor.id}>
-                  BS. {doctor.fullName} - {doctor.specialty}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {selectedDoctorId && (
-        <>
-          {/* Calendar */}
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Lịch làm việc - BS. {selectedDoctor?.fullName}
-              </CardTitle>
-              <CardDescription>
-                Chọn ngày để xem chi tiết lịch làm việc
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Calendar
-                selectedDate={selectedDate}
-                onDateSelect={handleDateSelect}
-                highlightedDates={getHighlightedDates()}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Schedule Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Chi tiết ngày {formatDate(selectedDate)}</CardTitle>
-              <CardDescription>
-                {daySchedules.length > 0
-                  ? `Có ${daySchedules.length} ca làm việc`
-                  : "Không có lịch làm việc"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {daySchedules.length > 0 ? (
-                <div className="space-y-3">
-                  {daySchedules
-                    .sort((a, b) => a.slotStart.localeCompare(b.slotStart))
-                    .map((schedule) => (
-                      <div
-                        key={schedule.id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2 min-w-[140px]">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">
-                              {schedule.slotStart} - {schedule.slotEnd}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="font-medium">
-                              BS. {selectedDoctor?.fullName}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {selectedDoctor?.specialty}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant={
-                              schedule.isBooked ? "destructive" : "default"
-                            }
-                          >
-                            {schedule.isBooked ? "Đã đặt" : "Còn trống"}
-                          </Badge>
-                          <Button variant="outline" size="sm">
-                            Xóa
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-4">
-                    Không có lịch làm việc trong ngày này
-                  </p>
-                  <Button variant="outline">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Tạo lịch làm việc
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
-    </div>
+    </AdminLayout>
   );
 }

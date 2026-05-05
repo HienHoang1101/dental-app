@@ -1,199 +1,125 @@
-<<<<<<< HEAD
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { useAuthStore } from "@/store/authStore";
-import { ROUTES } from "@/lib/constants/routes";
+import { useRouter } from "next/navigation";
+import { Bell, User, LogOut } from "lucide-react";
+import { useAuthStore } from "@/stores/authStore";
+import { authApi } from "@/lib/authApi";
+import { useState, useEffect } from "react";
+import { patientApi } from "@/lib/patientApi";
 
-export function Header() {
-  const pathname = usePathname();
-  const { user, isAuthenticated, clearAuth } = useAuthStore();
+export default function Header() {
+  const router = useRouter();
+  const { user, logout } = useAuthStore();
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const handleLogout = () => {
-    clearAuth();
-    window.location.href = ROUTES.LOGIN;
-  };
+  useEffect(() => {
+    if (user) {
+      loadUnreadCount();
+    }
+  }, [user]);
 
-  const getHomeRoute = () => {
-    if (!isAuthenticated) return ROUTES.HOME;
-
-    switch (user?.role) {
-      case "patient":
-        return ROUTES.PATIENT_CHAT;
-      case "doctor":
-        return ROUTES.DOCTOR_DASHBOARD;
-      case "admin":
-        return ROUTES.ADMIN_DASHBOARD;
-      default:
-        return ROUTES.HOME;
+  const loadUnreadCount = async () => {
+    try {
+      const count = await patientApi.getUnreadCount();
+      setUnreadCount(count);
+    } catch (error) {
+      console.error("Failed to load unread count:", error);
     }
   };
-=======
-'use client'
-
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { useAuthStore } from '@/store/authStore'
-import { ROUTES } from '@/lib/constants/routes'
-
-export function Header() {
-  const pathname = usePathname()
-  const { user, isAuthenticated, clearAuth } = useAuthStore()
 
   const handleLogout = () => {
-    clearAuth()
-    window.location.href = ROUTES.LOGIN
-  }
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
+    // JWT is stateless, just clear client-side data
+    logout();
+    router.push("/login");
+  };
+
+  const getRoleName = (role: string) => {
+    switch (role) {
+      case "patient":
+        return "Khách hàng";
+      case "doctor":
+        return "Bác sĩ";
+      case "admin":
+        return "Quản trị viên";
+      default:
+        return role;
+    }
+  };
+
+  const getNotificationPath = () => {
+    switch (user?.role) {
+      case "patient":
+        return "/patient/notifications";
+      case "doctor":
+        return "/doctor/notifications";
+      case "admin":
+        return "/admin/notifications";
+      default:
+        return "/notifications";
+    }
+  };
 
   return (
-    <header className="border-b">
-      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-<<<<<<< HEAD
-        <Link href={getHomeRoute()} className="flex items-center space-x-2">
-=======
-        <Link href={ROUTES.HOME} className="flex items-center space-x-2">
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
-          <span className="text-2xl">🦷</span>
-          <span className="text-xl font-bold">Dental Clinic AI</span>
-        </Link>
+    <header className="bg-white shadow-sm border-b sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          {/* Logo */}
+          <div className="flex items-center">
+            <h1 className="text-xl font-bold text-blue-600">🦷 Nha Khoa</h1>
+          </div>
 
-        <nav className="flex items-center space-x-4">
-          {isAuthenticated ? (
-            <>
-              <span className="text-sm text-muted-foreground">
-<<<<<<< HEAD
-                Xin chào, {user?.fullName}
-              </span>
-              {user?.role === "patient" && (
-                <>
-                  <Link href={ROUTES.PATIENT_CHAT}>
-                    <Button
-                      variant={
-                        pathname === ROUTES.PATIENT_CHAT ? "default" : "ghost"
-                      }
-                    >
-=======
-                Xin chào, {user?.name}
-              </span>
-              {user?.role === 'patient' && (
-                <>
-                  <Link href={ROUTES.PATIENT_DASHBOARD}>
-                    <Button variant={pathname === ROUTES.PATIENT_DASHBOARD ? 'default' : 'ghost'}>
-                      Dashboard
-                    </Button>
-                  </Link>
-                  <Link href={ROUTES.PATIENT_CHAT}>
-                    <Button variant={pathname === ROUTES.PATIENT_CHAT ? 'default' : 'ghost'}>
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
-                      Chat AI
-                    </Button>
-                  </Link>
-                  <Link href={ROUTES.PATIENT_BOOKING}>
-<<<<<<< HEAD
-                    <Button
-                      variant={
-                        pathname === ROUTES.PATIENT_BOOKING
-                          ? "default"
-                          : "ghost"
-                      }
-                    >
-                      Đặt lịch
-                    </Button>
-                  </Link>
-                  <Link href={ROUTES.PATIENT_HISTORY}>
-                    <Button
-                      variant={
-                        pathname === ROUTES.PATIENT_HISTORY
-                          ? "default"
-                          : "ghost"
-                      }
-                    >
-                      Lịch sử
-                    </Button>
-                  </Link>
-                </>
+          {/* Right side */}
+          <div className="flex items-center space-x-4">
+            {/* Notifications */}
+            <button
+              onClick={() => router.push(getNotificationPath())}
+              className="relative p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
               )}
-              {user?.role === "admin" && (
-                <>
-                  <Link href={ROUTES.ADMIN_DASHBOARD}>
-                    <Button
-                      variant={
-                        pathname === ROUTES.ADMIN_DASHBOARD
-                          ? "default"
-                          : "ghost"
-                      }
-                    >
-=======
-                    <Button variant={pathname === ROUTES.PATIENT_BOOKING ? 'default' : 'ghost'}>
-                      Đặt lịch
-                    </Button>
-                  </Link>
-                </>
-              )}
-              {user?.role === 'admin' && (
-                <>
-                  <Link href={ROUTES.ADMIN_DASHBOARD}>
-                    <Button variant={pathname === ROUTES.ADMIN_DASHBOARD ? 'default' : 'ghost'}>
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
-                      Dashboard
-                    </Button>
-                  </Link>
-                  <Link href={ROUTES.ADMIN_APPOINTMENTS}>
-<<<<<<< HEAD
-                    <Button
-                      variant={
-                        pathname === ROUTES.ADMIN_APPOINTMENTS
-                          ? "default"
-                          : "ghost"
-                      }
-                    >
-=======
-                    <Button variant={pathname === ROUTES.ADMIN_APPOINTMENTS ? 'default' : 'ghost'}>
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
-                      Lịch hẹn
-                    </Button>
-                  </Link>
-                  <Link href={ROUTES.ADMIN_KNOWLEDGE_BASE}>
-<<<<<<< HEAD
-                    <Button
-                      variant={
-                        pathname === ROUTES.ADMIN_KNOWLEDGE_BASE
-                          ? "default"
-                          : "ghost"
-                      }
-                    >
-=======
-                    <Button variant={pathname === ROUTES.ADMIN_KNOWLEDGE_BASE ? 'default' : 'ghost'}>
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
-                      Knowledge Base
-                    </Button>
-                  </Link>
-                </>
-              )}
-              <Button variant="outline" onClick={handleLogout}>
-                Đăng xuất
-              </Button>
-            </>
-          ) : (
-            <>
-              <Link href={ROUTES.LOGIN}>
-                <Button variant="ghost">Đăng nhập</Button>
-              </Link>
-              <Link href={ROUTES.REGISTER}>
-                <Button>Đăng ký</Button>
-              </Link>
-            </>
-          )}
-        </nav>
+            </button>
+
+            {/* User menu */}
+            <div className="flex items-center space-x-3">
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900">
+                  {user?.fullName}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {user && getRoleName(user.role)}
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    const profilePath =
+                      user?.role === "patient"
+                        ? "/patient/profile"
+                        : user?.role === "doctor"
+                          ? "/doctor/profile"
+                          : "/admin/profile";
+                    router.push(profilePath);
+                  }}
+                  className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <User className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="p-2 text-gray-600 hover:text-red-600 hover:bg-gray-100 rounded-full transition-colors"
+                  title="Đăng xuất"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
-<<<<<<< HEAD
   );
-=======
-  )
->>>>>>> ee5d247497f575ed566136dac5a54f200228398f
 }

@@ -49,6 +49,64 @@ fun Route.scheduleRoutes() {
                 }
             }
 
+            // Admin: Update shift
+            put("/shifts/{id}") {
+                try {
+                    val principal = call.principal<JWTPrincipal>()
+                    val role = principal!!.payload.getClaim("role").asString()
+                    
+                    if (role != "admin") {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(error = "FORBIDDEN", message = "Access denied"))
+                        return@put
+                    }
+
+                    val id = UUID.fromString(call.parameters["id"])
+                    val request = call.receive<UpdateShiftRequest>()
+                    val shift = ScheduleService.updateShift(id, request)
+                    
+                    if (shift != null) {
+                        call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = shift))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(error = "NOT_FOUND", message = "Shift not found"))
+                    }
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "UPDATE_FAILED", message = e.message ?: "Failed to update shift")
+                    )
+                }
+            }
+
+            // Admin: Delete shift
+            delete("/shifts/{id}") {
+                try {
+                    val principal = call.principal<JWTPrincipal>()
+                    val role = principal!!.payload.getClaim("role").asString()
+                    
+                    if (role != "admin") {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(error = "FORBIDDEN", message = "Access denied"))
+                        return@delete
+                    }
+
+                    val id = UUID.fromString(call.parameters["id"])
+                    val deleted = ScheduleService.deleteShift(id)
+                    
+                    if (deleted) {
+                        call.respond(HttpStatusCode.OK, ApiResponse<Unit>(success = true, message = "Shift deleted successfully"))
+                    } else {
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ErrorResponse(error = "DELETE_FAILED", message = "Cannot delete shift with existing work schedules")
+                        )
+                    }
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
+                    )
+                }
+            }
+
             // Admin: Create work schedule
             post("/work-schedules") {
                 try {
@@ -71,6 +129,30 @@ fun Route.scheduleRoutes() {
                             ErrorResponse(error = "CREATE_FAILED", message = error.message ?: "Failed to create work schedule")
                         )
                     }
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
+                    )
+                }
+            }
+
+            // Get work schedules (admin can get all, or filter by date/doctor)
+            get("/work-schedules") {
+                try {
+                    val principal = call.principal<JWTPrincipal>()
+                    val role = principal!!.payload.getClaim("role").asString()
+                    
+                    if (role != "admin") {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(error = "FORBIDDEN", message = "Access denied"))
+                        return@get
+                    }
+
+                    val date = call.request.queryParameters["date"]?.let { LocalDate.parse(it) }
+                    val doctorId = call.request.queryParameters["doctorId"]?.let { UUID.fromString(it) }
+                    
+                    val schedules = ScheduleService.getWorkSchedules(date, doctorId)
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = schedules))
                 } catch (e: Exception) {
                     call.respond(
                         HttpStatusCode.InternalServerError,
@@ -177,6 +259,33 @@ fun Route.scheduleRoutes() {
                 }
             }
 
+            // Admin: Delete holiday
+            delete("/holidays/{id}") {
+                try {
+                    val principal = call.principal<JWTPrincipal>()
+                    val role = principal!!.payload.getClaim("role").asString()
+                    
+                    if (role != "admin") {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(error = "FORBIDDEN", message = "Access denied"))
+                        return@delete
+                    }
+
+                    val id = UUID.fromString(call.parameters["id"])
+                    val deleted = ScheduleService.deleteHoliday(id)
+                    
+                    if (deleted) {
+                        call.respond(HttpStatusCode.OK, ApiResponse<Unit>(success = true, message = "Holiday deleted successfully"))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(error = "NOT_FOUND", message = "Holiday not found"))
+                    }
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "DELETE_FAILED", message = e.message ?: "Failed to delete holiday")
+                    )
+                }
+            }
+
             // Doctor: Create leave request
             post("/leave-requests") {
                 try {
@@ -189,7 +298,7 @@ fun Route.scheduleRoutes() {
                         return@post
                     }
 
-                    val doctor = com.nhom2.doctors.DoctorService.getDoctorByUserId(userId)
+                    val doctor = com.nhom2.doctors.SupabaseDoctorService.getDoctorByUserId(userId)
                     if (doctor == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse(error = "NOT_FOUND", message = "Doctor profile not found"))
                         return@post
@@ -218,7 +327,7 @@ fun Route.scheduleRoutes() {
                         return@get
                     }
 
-                    val doctor = com.nhom2.doctors.DoctorService.getDoctorByUserId(userId)
+                    val doctor = com.nhom2.doctors.SupabaseDoctorService.getDoctorByUserId(userId)
                     if (doctor == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse(error = "NOT_FOUND", message = "Doctor profile not found"))
                         return@get

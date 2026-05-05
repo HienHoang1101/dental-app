@@ -2,7 +2,7 @@ package com.nhom2.schedule
 
 import com.nhom2.common.*
 import com.nhom2.models.*
-import com.nhom2.doctors.DoctorService
+import com.nhom2.doctors.SupabaseDoctorService
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -38,6 +38,36 @@ object ScheduleService {
     fun getAllShifts(): List<ShiftDTO> {
         return transaction {
             Shifts.selectAll().map { it.toShiftDTO() }
+        }
+    }
+
+    fun updateShift(id: UUID, request: UpdateShiftRequest): ShiftDTO? {
+        return transaction {
+            val exists = Shifts.select { Shifts.id eq id }.count() > 0
+            if (!exists) return@transaction null
+
+            Shifts.update({ Shifts.id eq id }) {
+                request.name?.let { v -> it[name] = v }
+                request.startTime?.let { v -> it[startTime] = LocalTime.parse(v) }
+                request.endTime?.let { v -> it[endTime] = LocalTime.parse(v) }
+            }
+
+            getShiftById(id)
+        }
+    }
+
+    fun deleteShift(id: UUID): Boolean {
+        return transaction {
+            // Check if shift has any work schedules
+            val hasWorkSchedules = WorkSchedules.select { 
+                WorkSchedules.shiftId eq id 
+            }.count() > 0
+
+            if (hasWorkSchedules) {
+                return@transaction false
+            }
+
+            Shifts.deleteWhere { Shifts.id eq id } > 0
         }
     }
 
@@ -118,6 +148,23 @@ object ScheduleService {
             WorkSchedules.select { WorkSchedules.id eq id }
                 .singleOrNull()
                 ?.toWorkScheduleDTO()
+        }
+    }
+
+    fun getWorkSchedules(date: LocalDate?, doctorId: UUID?): List<WorkScheduleDTO> {
+        return transaction {
+            var query = WorkSchedules.selectAll()
+
+            date?.let {
+                query = query.andWhere { WorkSchedules.date eq it }
+            }
+
+            doctorId?.let {
+                query = query.andWhere { WorkSchedules.doctorId eq it }
+            }
+
+            query.orderBy(WorkSchedules.date to SortOrder.ASC)
+                .map { it.toWorkScheduleDTO() }
         }
     }
 
@@ -283,7 +330,7 @@ object ScheduleService {
         val doctorId = this[WorkSchedules.doctorId]
         val shiftId = this[WorkSchedules.shiftId]
 
-        val doctor = DoctorService.getDoctorSummary(doctorId)!!
+        val doctor = SupabaseDoctorService.getDoctorSummary(doctorId)!!
         val shift = getShiftById(shiftId)!!
         val timeSlots = TimeSlots.select { TimeSlots.workScheduleId eq wsId }
             .map { it.toTimeSlotDTOWithAvailability() }
@@ -336,7 +383,7 @@ object ScheduleService {
         val doctorId = this[LeaveRequests.doctorId]
         val reviewedById = this[LeaveRequests.reviewedBy]
 
-        val doctor = DoctorService.getDoctorSummary(doctorId)!!
+        val doctor = SupabaseDoctorService.getDoctorSummary(doctorId)!!
         val reviewedBy = reviewedById?.let { id ->
             Users.select { Users.id eq id }.singleOrNull()?.toUserDTO()
         }
