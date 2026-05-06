@@ -12,6 +12,7 @@ import json
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from underthesea import word_tokenize
 
 # ── Cấu hình từ .env ────────────────────────────────────────
 MODEL_BACKEND    = os.getenv("MODEL_BACKEND", "svm")   # "svm" | "phobert"
@@ -60,16 +61,31 @@ _embed_model = SentenceTransformer("bkai-foundation-models/vietnamese-bi-encoder
 print("✅ Embedding model loaded")
 
 # ── Kết nối Pinecone ────────────────────────────────────────
-from pinecone import Pinecone
-_pc    = Pinecone(api_key=PINECONE_API_KEY)
-_index = _pc.Index(PINECONE_INDEX)
-print(f"✅ Pinecone connected: {PINECONE_INDEX}")
+_pc    = None
+_index = None
+
+
+def get_pinecone_index():
+    global _pc, _index
+    if _index is None:
+        from pinecone import Pinecone
+        _pc = Pinecone(api_key=PINECONE_API_KEY)
+        _index = _pc.Index(PINECONE_INDEX)
+        print(f"✅ Pinecone connected: {PINECONE_INDEX}")
+    return _index
 
 # ── Gemini client ────────────────────────────────────────────
-import google.generativeai as genai
-genai.configure(api_key=GEMINI_API_KEY)
-_gemini = genai.GenerativeModel("gemini-2.5-flash")
-print("✅ Gemini configured")
+_gemini = None
+
+
+def get_gemini_model():
+    global _gemini
+    if _gemini is None:
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        _gemini = genai.GenerativeModel("gemini-2.5-flash-lite")
+        print("✅ Gemini configured")
+    return _gemini
 
 
 # ══════════════════════════════════════════════════════════
@@ -77,17 +93,15 @@ print("✅ Gemini configured")
 # ══════════════════════════════════════════════════════════
 
 def preprocess(text: str) -> str:
-    return text.strip().lower()
+    return word_tokenize(text.strip().lower(), format="text")
 
 
 def classify_svm(text: str) -> dict:
     """SVM classify → trả về label + confidence + top3."""
-    processed  = preprocess(text)
-    label      = _svm_pipeline.predict([processed])[0]
-    scores     = _svm_pipeline.decision_function([processed])[0]
-    scores_exp = np.exp(scores - np.max(scores))
-    probs      = scores_exp / scores_exp.sum()
-    classes    = _svm_pipeline.classes_
+    processed = preprocess(text)
+    label     = _svm_pipeline.predict([processed])[0]
+    probs     = _svm_pipeline.predict_proba([processed])[0]
+    classes   = _svm_pipeline.classes_
 
     top_labels = sorted(
         [{"label": c, "confidence": round(float(p), 4)}
@@ -145,8 +159,9 @@ def retrieve_context(question: str, _label: str, top_k: int = 3) -> list[dict]:
     ).tolist()
 
     all_matches = []
+    index = get_pinecone_index()
     for ns in PINECONE_NAMESPACES:
-        results = _index.query(
+        results = index.query(
             vector=vector,
             top_k=2,
             include_metadata=True,
@@ -213,8 +228,14 @@ Câu trả lời:"""
 
 def generate_answer(prompt: str) -> str:
     """Gọi Gemini API để sinh câu trả lời."""
+    # Allow a mock mode for offline/testing (set MOCK_GEMINI=1 in .env or env)
+    if os.getenv("MOCK_GEMINI", "") == "1":
+        # Return a short deterministic mock answer based on the prompt's first line
+        first_line = prompt.splitlines()[0][:200]
+        return f"[MOCK ANSWER] Dựa trên thông tin: {first_line}... (mock)"
+
     try:
-        response = _gemini.generate_content(
+        response = get_gemini_model().generate_content(
             prompt,
             generation_config={
                 "max_output_tokens": 1024,
@@ -399,7 +420,7 @@ def embed_endpoint(request: EmbedRequest):
             tmp_path = tmp.name
 
         # Chạy pipeline
-        result = process_pdf(tmp_path, _index)
+        result = process_pdf(tmp_path, get_pinecone_index())
 
         # Xóa file tạm
         os.unlink(tmp_path)
