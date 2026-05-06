@@ -7,11 +7,13 @@ import DatePicker from "@/components/appointments/DatePicker";
 import { patientApi } from "@/lib/patientApi";
 import { Doctor, Holiday, WorkSchedule } from "@/types";
 import { ArrowLeft, User } from "lucide-react";
+import { getTodayString, formatDateToString } from "@/lib/dateUtils";
 
 export default function SelectDateByDoctorPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const doctorId = searchParams.get("doctorId");
+  const serviceId = searchParams.get("serviceId");
 
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -20,12 +22,12 @@ export default function SelectDateByDoctorPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!doctorId) {
+    if (!doctorId || !serviceId) {
       router.push("/patient/appointments/book/by-doctor");
       return;
     }
     loadData();
-  }, [doctorId]);
+  }, [doctorId, serviceId]);
 
   const loadData = async () => {
     try {
@@ -38,8 +40,8 @@ export default function SelectDateByDoctorPage() {
         patientApi.getHolidays(),
         patientApi.getWorkSchedules({
           doctorId: doctorId!,
-          startDate: today.toISOString().split("T")[0],
-          endDate: endDate.toISOString().split("T")[0],
+          startDate: formatDateToString(today),
+          endDate: formatDateToString(endDate),
         }),
       ]);
 
@@ -58,9 +60,9 @@ export default function SelectDateByDoctorPage() {
   };
 
   const handleContinue = () => {
-    if (selectedDate && doctorId) {
+    if (selectedDate && doctorId && serviceId) {
       router.push(
-        `/patient/appointments/book/by-doctor/select-time?doctorId=${doctorId}&date=${selectedDate}`,
+        `/patient/appointments/book/by-doctor/select-time?doctorId=${doctorId}&serviceId=${serviceId}&date=${selectedDate}`,
       );
     }
   };
@@ -71,7 +73,7 @@ export default function SelectDateByDoctorPage() {
     // Add dates without work schedules
   ];
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayString();
 
   if (loading) {
     return (
@@ -119,10 +121,10 @@ export default function SelectDateByDoctorPage() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-              {doctor.avatar ? (
+              {doctor.avatarUrl ? (
                 <img
-                  src={doctor.avatar}
-                  alt={doctor.user.fullName}
+                  src={doctor.avatarUrl}
+                  alt={doctor.fullName}
                   className="w-16 h-16 rounded-full object-cover"
                 />
               ) : (
@@ -131,9 +133,9 @@ export default function SelectDateByDoctorPage() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
-                {doctor.user.fullName}
+                {doctor.fullName}
               </h2>
-              <p className="text-blue-600">{doctor.specialty.name}</p>
+              <p className="text-blue-600">{doctor.specialty}</p>
             </div>
           </div>
         </div>

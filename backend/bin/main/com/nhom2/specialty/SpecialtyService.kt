@@ -86,7 +86,6 @@ object SpecialtyService {
         val doctorCount = try {
             SupabaseDoctors.select { SupabaseDoctors.specialty eq specialtyName }.count().toInt()
         } catch (e: Exception) {
-            println("Warning: Failed to count doctors for specialty '$specialtyName': ${e.message}")
             0
         }
         

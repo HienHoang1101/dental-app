@@ -1,23 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { adminApi } from "@/lib/adminApi";
+import { Specialty } from "@/types";
 
 export default function CreateDoctorPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [specialties, setSpecialties] = useState<Specialty[]>([]);
+  const [loadingSpecialties, setLoadingSpecialties] = useState(true);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     fullName: "",
     phone: "",
-    specialty: "General Dentistry",
+    specialty: "",
     degree: "DDS",
     bio: "",
     avatarUrl: "",
   });
+
+  useEffect(() => {
+    loadSpecialties();
+  }, []);
+
+  const loadSpecialties = async () => {
+    try {
+      const data = await adminApi.getSpecialties();
+      const activeSpecialties = data.filter((s) => s.isActive);
+      setSpecialties(activeSpecialties);
+      // Set default specialty to first active specialty
+      if (activeSpecialties.length > 0) {
+        setFormData((prev) => ({
+          ...prev,
+          specialty: activeSpecialties[0].name,
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to load specialties:", error);
+      alert("Không thể tải danh sách chuyên khoa");
+    } finally {
+      setLoadingSpecialties(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,26 +186,27 @@ export default function CreateDoctorPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, specialty: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={loadingSpecialties}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
-                    <option value="General Dentistry">
-                      Nha khoa tổng quát (General Dentistry)
-                    </option>
-                    <option value="Orthodontics">
-                      Chỉnh nha (Orthodontics)
-                    </option>
-                    <option value="Cosmetic Dentistry">
-                      Nha khoa thẩm mỹ (Cosmetic Dentistry)
-                    </option>
-                    <option value="Endodontics">Nội nha (Endodontics)</option>
-                    <option value="Periodontics">Nha chu (Periodontics)</option>
-                    <option value="Oral Surgery">
-                      Phẫu thuật hàm mặt (Oral Surgery)
-                    </option>
-                    <option value="Pediatric Dentistry">
-                      Nha khoa trẻ em (Pediatric Dentistry)
-                    </option>
+                    {loadingSpecialties ? (
+                      <option>Đang tải...</option>
+                    ) : specialties.length === 0 ? (
+                      <option>Chưa có chuyên khoa nào</option>
+                    ) : (
+                      specialties.map((specialty) => (
+                        <option key={specialty.id} value={specialty.name}>
+                          {specialty.name}
+                        </option>
+                      ))
+                    )}
                   </select>
+                  {!loadingSpecialties && specialties.length === 0 && (
+                    <p className="text-xs text-red-500 mt-1">
+                      Vui lòng thêm chuyên khoa trong phần quản lý chuyên khoa
+                      trước
+                    </p>
+                  )}
                 </div>
 
                 <div>

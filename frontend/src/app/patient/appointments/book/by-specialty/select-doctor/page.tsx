@@ -6,11 +6,13 @@ import PatientLayout from "@/components/layout/PatientLayout";
 import { patientApi } from "@/lib/patientApi";
 import { Doctor, TimeSlot, DoctorSummary } from "@/types";
 import { ArrowLeft, Clock, User } from "lucide-react";
+import { formatDateShort } from "@/lib/dateUtils";
 
 export default function SelectDoctorBySpecialtyPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const specialtyId = searchParams.get("specialtyId");
+  const serviceId = searchParams.get("serviceId");
   const date = searchParams.get("date");
 
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -21,12 +23,12 @@ export default function SelectDoctorBySpecialtyPage() {
   const [loadingSlots, setLoadingSlots] = useState(false);
 
   useEffect(() => {
-    if (!specialtyId || !date) {
+    if (!specialtyId || !serviceId || !date) {
       router.push("/patient/appointments/book/by-specialty");
       return;
     }
     loadDoctors();
-  }, [specialtyId, date]);
+  }, [specialtyId, serviceId, date]);
 
   const loadDoctors = async () => {
     try {
@@ -61,7 +63,7 @@ export default function SelectDoctorBySpecialtyPage() {
   const handleContinue = () => {
     if (selectedDoctor && selectedSlot) {
       router.push(
-        `/patient/appointments/book/confirm?doctorId=${selectedDoctor}&timeSlotId=${selectedSlot}&date=${date}`,
+        `/patient/appointments/book/confirm?doctorId=${selectedDoctor}&serviceId=${serviceId}&timeSlotId=${selectedSlot}&date=${date}`,
       );
     }
   };
@@ -91,7 +93,7 @@ export default function SelectDoctorBySpecialtyPage() {
           Chọn bác sĩ và khung giờ
         </h1>
         <p className="text-gray-600 mb-8">
-          Ngày khám: {new Date(date!).toLocaleDateString("vi-VN")}
+          Ngày khám: {formatDateShort(date!)}
         </p>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -111,10 +113,10 @@ export default function SelectDoctorBySpecialtyPage() {
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      {doctor.avatar ? (
+                      {doctor.avatarUrl ? (
                         <img
-                          src={doctor.avatar}
-                          alt={doctor.user.fullName}
+                          src={doctor.avatarUrl}
+                          alt={doctor.fullName}
                           className="w-12 h-12 rounded-full object-cover"
                         />
                       ) : (
@@ -123,11 +125,11 @@ export default function SelectDoctorBySpecialtyPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-gray-900">
-                        {doctor.user.fullName}
+                        {doctor.fullName}
                       </h3>
-                      {doctor.qualifications && (
+                      {doctor.degree && (
                         <p className="text-sm text-gray-600 truncate">
-                          {doctor.qualifications}
+                          {doctor.degree}
                         </p>
                       )}
                     </div>

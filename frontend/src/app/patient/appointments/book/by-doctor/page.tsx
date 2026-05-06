@@ -42,11 +42,11 @@ export default function BookByDoctorPage() {
   const filteredDoctors = doctors.filter((doctor) => {
     if (
       searchTerm &&
-      !doctor.user.fullName.toLowerCase().includes(searchTerm.toLowerCase())
+      !doctor.fullName.toLowerCase().includes(searchTerm.toLowerCase())
     ) {
       return false;
     }
-    if (selectedSpecialty && doctor.specialty.id !== selectedSpecialty) {
+    if (selectedSpecialty && doctor.specialty !== selectedSpecialty) {
       return false;
     }
     // Additional filters would need schedule data
@@ -55,7 +55,7 @@ export default function BookByDoctorPage() {
 
   const handleSelectDoctor = (doctorId: string) => {
     router.push(
-      `/patient/appointments/book/by-doctor/select-date?doctorId=${doctorId}`,
+      `/patient/appointments/book/by-doctor/select-service?doctorId=${doctorId}`,
     );
   };
 
@@ -165,10 +165,10 @@ export default function BookByDoctorPage() {
             >
               <div className="flex items-start gap-4">
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  {doctor.avatar ? (
+                  {doctor.avatarUrl ? (
                     <img
-                      src={doctor.avatar}
-                      alt={doctor.user.fullName}
+                      src={doctor.avatarUrl}
+                      alt={doctor.fullName}
                       className="w-16 h-16 rounded-full object-cover"
                     />
                   ) : (
@@ -178,15 +178,15 @@ export default function BookByDoctorPage() {
 
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                    {doctor.user.fullName}
+                    {doctor.fullName}
                   </h3>
                   <p className="text-sm text-blue-600 mb-2">
-                    {doctor.specialty.name}
+                    {doctor.specialty}
                   </p>
 
-                  {doctor.qualifications && (
+                  {doctor.degree && (
                     <p className="text-sm text-gray-600 mb-3">
-                      {doctor.qualifications}
+                      {doctor.degree}
                     </p>
                   )}
 

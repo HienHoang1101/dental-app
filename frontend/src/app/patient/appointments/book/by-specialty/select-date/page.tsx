@@ -7,23 +7,25 @@ import DatePicker from "@/components/appointments/DatePicker";
 import { patientApi } from "@/lib/patientApi";
 import { Holiday } from "@/types";
 import { ArrowLeft } from "lucide-react";
+import { getTodayString } from "@/lib/dateUtils";
 
 export default function SelectDateBySpecialtyPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const specialtyId = searchParams.get("specialtyId");
+  const serviceId = searchParams.get("serviceId");
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!specialtyId) {
+    if (!specialtyId || !serviceId) {
       router.push("/patient/appointments/book/by-specialty");
       return;
     }
     loadHolidays();
-  }, [specialtyId]);
+  }, [specialtyId, serviceId]);
 
   const loadHolidays = async () => {
     try {
@@ -43,13 +45,13 @@ export default function SelectDateBySpecialtyPage() {
   const handleContinue = () => {
     if (selectedDate) {
       router.push(
-        `/patient/appointments/book/by-specialty/select-doctor?specialtyId=${specialtyId}&date=${selectedDate}`,
+        `/patient/appointments/book/by-specialty/select-doctor?specialtyId=${specialtyId}&serviceId=${serviceId}&date=${selectedDate}`,
       );
     }
   };
 
   const disabledDates = holidays.map((h) => h.date);
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayString();
 
   if (loading) {
     return (

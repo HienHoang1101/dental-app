@@ -6,11 +6,13 @@ import PatientLayout from "@/components/layout/PatientLayout";
 import { patientApi } from "@/lib/patientApi";
 import { Doctor, TimeSlot } from "@/types";
 import { ArrowLeft, Clock, User } from "lucide-react";
+import { formatDateShort } from "@/lib/dateUtils";
 
 export default function SelectTimeByDoctorPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const doctorId = searchParams.get("doctorId");
+  const serviceId = searchParams.get("serviceId");
   const date = searchParams.get("date");
 
   const [doctor, setDoctor] = useState<Doctor | null>(null);
@@ -19,12 +21,12 @@ export default function SelectTimeByDoctorPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!doctorId || !date) {
+    if (!doctorId || !serviceId || !date) {
       router.push("/patient/appointments/book/by-doctor");
       return;
     }
     loadData();
-  }, [doctorId, date]);
+  }, [doctorId, serviceId, date]);
 
   const loadData = async () => {
     try {
@@ -43,9 +45,9 @@ export default function SelectTimeByDoctorPage() {
   };
 
   const handleContinue = () => {
-    if (selectedSlot) {
+    if (selectedSlot && serviceId) {
       router.push(
-        `/patient/appointments/book/confirm?doctorId=${doctorId}&timeSlotId=${selectedSlot}&date=${date}`,
+        `/patient/appointments/book/confirm?doctorId=${doctorId}&serviceId=${serviceId}&timeSlotId=${selectedSlot}&date=${date}`,
       );
     }
   };
@@ -96,10 +98,10 @@ export default function SelectTimeByDoctorPage() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-              {doctor.avatar ? (
+              {doctor.avatarUrl ? (
                 <img
-                  src={doctor.avatar}
-                  alt={doctor.user.fullName}
+                  src={doctor.avatarUrl}
+                  alt={doctor.fullName}
                   className="w-16 h-16 rounded-full object-cover"
                 />
               ) : (
@@ -108,9 +110,9 @@ export default function SelectTimeByDoctorPage() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
-                {doctor.user.fullName}
+                {doctor.fullName}
               </h2>
-              <p className="text-blue-600">{doctor.specialty.name}</p>
+              <p className="text-blue-600">{doctor.specialty}</p>
             </div>
           </div>
         </div>
@@ -119,7 +121,7 @@ export default function SelectTimeByDoctorPage() {
           Chọn khung giờ khám
         </h1>
         <p className="text-gray-600 mb-8">
-          Ngày khám: {new Date(date!).toLocaleDateString("vi-VN")}
+          Ngày khám: {formatDateShort(date!)}
         </p>
 
         {timeSlots.length === 0 ? (

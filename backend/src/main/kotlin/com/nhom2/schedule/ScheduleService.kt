@@ -191,12 +191,16 @@ object ScheduleService {
                 (WorkSchedules.doctorId eq doctorId) and (WorkSchedules.date eq date)
             }
 
-            workSchedules.flatMap { ws ->
+            val result = workSchedules.flatMap { ws ->
                 val wsId = ws[WorkSchedules.id]
-                TimeSlots.select { TimeSlots.workScheduleId eq wsId }
-                    .map { it.toTimeSlotDTOWithAvailability() }
+                
+                val timeSlots = TimeSlots.select { TimeSlots.workScheduleId eq wsId }
+                
+                timeSlots.map { it.toTimeSlotDTOWithAvailability() }
                     .filter { it.isAvailable }
             }
+            
+            result
         }
     }
 

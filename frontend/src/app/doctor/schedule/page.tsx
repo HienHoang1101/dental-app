@@ -15,8 +15,16 @@ interface WorkSchedule {
   createdAt: string;
 }
 
+interface Shift {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+}
+
 export default function DoctorSchedulePage() {
   const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [dateRange, setDateRange] = useState({
@@ -27,12 +35,36 @@ export default function DoctorSchedulePage() {
   });
   const [newSchedule, setNewSchedule] = useState({
     date: "",
-    shiftId: "default",
+    shiftId: "",
   });
 
   useEffect(() => {
     loadSchedules();
+    loadShifts();
   }, [dateRange]);
+
+  const loadShifts = async () => {
+    try {
+      const response = await fetch(
+        "http://localhost:8080/api/schedules/shifts",
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        },
+      );
+      const data = await response.json();
+      if (data.success && data.data) {
+        setShifts(data.data);
+        // Set first shift as default
+        if (data.data.length > 0) {
+          setNewSchedule((prev) => ({ ...prev, shiftId: data.data[0].id }));
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load shifts:", error);
+    }
+  };
 
   const loadSchedules = async () => {
     try {
@@ -56,7 +88,10 @@ export default function DoctorSchedulePage() {
         date: newSchedule.date,
       });
       setShowModal(false);
-      setNewSchedule({ date: "", shiftId: "default" });
+      setNewSchedule({
+        date: "",
+        shiftId: shifts.length > 0 ? shifts[0].id : "",
+      });
       loadSchedules();
     } catch (error) {
       alert("Không thể đăng ký lịch làm việc");
@@ -249,17 +284,26 @@ export default function DoctorSchedulePage() {
                   Ca làm việc
                 </label>
                 <select
+                  required
                   value={newSchedule.shiftId}
                   onChange={(e) =>
                     setNewSchedule({ ...newSchedule, shiftId: e.target.value })
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
-                  <option value="default">Ca mặc định (9:00 - 17:00)</option>
+                  <option value="">-- Chọn ca làm việc --</option>
+                  {shifts.map((shift) => (
+                    <option key={shift.id} value={shift.id}>
+                      {shift.name} ({shift.startTime.substring(0, 5)} -{" "}
+                      {shift.endTime.substring(0, 5)})
+                    </option>
+                  ))}
                 </select>
-                <p className="mt-1 text-xs text-gray-500">
-                  Hiện tại chỉ hỗ trợ ca mặc định
-                </p>
+                {shifts.length === 0 && (
+                  <p className="mt-1 text-xs text-red-500">
+                    Không có ca làm việc nào. Vui lòng liên hệ admin.
+                  </p>
+                )}
               </div>
               <div className="flex gap-2 justify-end">
                 <button

@@ -25,8 +25,35 @@ object SupabaseDoctorService {
                 
                 query.map { it.toSupabaseDoctorDTO() }
             } catch (e: Exception) {
-                println("Error fetching doctors: ${e.message}")
-                e.printStackTrace()
+                emptyList()
+            }
+        }
+    }
+
+    fun getDoctorsBySpecialtyId(specialtyId: String, activeOnly: Boolean = false): List<SupabaseDoctorDTO> {
+        return transaction {
+            try {
+                // First, get the specialty name from the specialties table
+                val specialtyName = Specialties
+                    .select { Specialties.id eq UUID.fromString(specialtyId) }
+                    .singleOrNull()
+                    ?.get(Specialties.name)
+                    ?: return@transaction emptyList()
+                
+                // Then filter doctors by specialty name
+                val query = if (activeOnly) {
+                    (SupabaseDoctors leftJoin Users)
+                        .select { 
+                            (SupabaseDoctors.isActive eq true) and 
+                            (SupabaseDoctors.specialty eq specialtyName)
+                        }
+                } else {
+                    (SupabaseDoctors leftJoin Users)
+                        .select { SupabaseDoctors.specialty eq specialtyName }
+                }
+                
+                query.map { it.toSupabaseDoctorDTO() }
+            } catch (e: Exception) {
                 emptyList()
             }
         }

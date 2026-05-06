@@ -6,6 +6,7 @@ import PatientLayout from "@/components/layout/PatientLayout";
 import { patientApi } from "@/lib/patientApi";
 import { Specialty } from "@/types";
 import { ArrowLeft } from "lucide-react";
+import { formatDateShort } from "@/lib/dateUtils";
 
 export default function SelectSpecialtyByDatePage() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function SelectSpecialtyByDatePage() {
 
   const handleSelectSpecialty = (specialtyId: string) => {
     router.push(
-      `/patient/appointments/book/by-specialty/select-doctor?specialtyId=${specialtyId}&date=${date}`,
+      `/patient/appointments/book/by-date/select-service?specialtyId=${specialtyId}&date=${date}`,
     );
   };
 
@@ -65,7 +66,7 @@ export default function SelectSpecialtyByDatePage() {
           Chọn chuyên khoa
         </h1>
         <p className="text-gray-600 mb-8">
-          Ngày khám: {new Date(date!).toLocaleDateString("vi-VN")}
+          Ngày khám: {formatDateShort(date!)}
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

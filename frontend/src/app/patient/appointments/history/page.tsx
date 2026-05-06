@@ -6,6 +6,7 @@ import PatientLayout from "@/components/layout/PatientLayout";
 import { patientApi } from "@/lib/patientApi";
 import { Appointment } from "@/types";
 import { Calendar, Clock, User, FileText, X } from "lucide-react";
+import { parseLocalDate } from "@/lib/dateUtils";
 
 type StatusFilter = "all" | "pending" | "confirmed" | "completed" | "cancelled";
 type SortOrder = "newest" | "oldest";
@@ -115,7 +116,7 @@ export default function AppointmentHistoryPage() {
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = parseLocalDate(dateStr);
     return date.toLocaleDateString("vi-VN", {
       weekday: "long",
       year: "numeric",

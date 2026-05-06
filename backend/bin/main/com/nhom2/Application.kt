@@ -14,9 +14,6 @@ fun main(args: Array<String>) {
 
 fun Application.module() {
     DatabaseConfig.init()
-
-    // Seed data disabled - using Supabase data
-    println("📊 Using existing Supabase/PostgreSQL data")
     
     // CORS — cho phép frontend Next.js gọi API
     install(CORS) {

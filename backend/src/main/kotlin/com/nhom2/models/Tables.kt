@@ -80,6 +80,7 @@ object Services : Table("services") {
     val price       = integer("price") // stored as integer in Supabase
     val duration    = integer("duration_minutes") // column name in Supabase
     val category    = text("category").nullable()
+    val specialtyId = uuid("specialty_id").references(Specialties.id).nullable()
     val isActive    = bool("is_active").default(true)
     val createdAt   = timestamp("created_at").clientDefault { Instant.now() }
 
@@ -142,6 +143,7 @@ object Appointments : Table("appointments") {
     val patientId       = uuid("patient_id").references(Users.id)
     val doctorId        = uuid("doctor_id").references(SupabaseDoctors.id)
     val healthRecordId  = uuid("health_record_id").references(HealthRecords.id)
+    val scheduleId      = uuid("schedule_id").references(DoctorSchedules.id).nullable() // Nullable for backward compatibility
     val timeSlotId      = uuid("time_slot_id").references(TimeSlots.id)
     val serviceId       = uuid("service_id").references(Services.id).nullable()
     val appointmentDate = date("appointment_date")

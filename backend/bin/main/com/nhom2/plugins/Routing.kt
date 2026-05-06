@@ -3,8 +3,7 @@ package com.nhom2.plugins
 import com.nhom2.auth.authRoutes
 import com.nhom2.healthrecord.healthRecordRoutes
 import com.nhom2.specialty.specialtyRoutes
-// import com.nhom2.doctors.doctorRoutes // DEPRECATED: Use SupabaseDoctorService instead
-// import com.nhom2.doctors.supabaseDoctorApiRoutes // No routes function in SupabaseDoctorService
+import com.nhom2.doctors.doctorRoutes
 import com.nhom2.doctor.doctorDashboardRoutes
 import com.nhom2.admin.adminApiRoutes
 import com.nhom2.services.serviceRoutes
@@ -33,7 +32,7 @@ fun Application.configureRouting() {
             patientRoutes()
             healthRecordRoutes()
             specialtyRoutes()
-            // doctorRoutes() // DEPRECATED: Doctor routes now in doctorDashboardRoutes and adminApiRoutes
+            doctorRoutes()
             doctorDashboardRoutes()
             adminApiRoutes()
             serviceRoutes()

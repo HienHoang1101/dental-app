@@ -52,8 +52,6 @@ export default function ServicesPage() {
         isActive: editingService ? undefined : true, // Only set for create
       };
 
-      console.log("Submitting data:", submitData); // Debug log
-
       if (editingService) {
         // For update, remove undefined fields
         Object.keys(submitData).forEach((key) => {

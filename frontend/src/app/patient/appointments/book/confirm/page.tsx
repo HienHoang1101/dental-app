@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PatientLayout from "@/components/layout/PatientLayout";
 import { patientApi } from "@/lib/patientApi";
-import { Doctor, TimeSlot, HealthRecord } from "@/types";
+import { Doctor, TimeSlot, Service, HealthRecord } from "@/types";
 import {
   ArrowLeft,
   Calendar,
@@ -12,17 +12,23 @@ import {
   User,
   FileText,
   CheckCircle,
+  DollarSign,
 } from "lucide-react";
+import { formatDateLong, parseLocalDate } from "@/lib/dateUtils";
 
 export default function ConfirmAppointmentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const doctorId = searchParams.get("doctorId");
+  const serviceId = searchParams.get("serviceId");
   const timeSlotId = searchParams.get("timeSlotId");
   const date = searchParams.get("date");
 
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [timeSlot, setTimeSlot] = useState<TimeSlot | null>(null);
+  const [service, setService] = useState<Service | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState<string>("");
   const [healthRecord, setHealthRecord] = useState<HealthRecord | null>(null);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
@@ -40,15 +46,36 @@ export default function ConfirmAppointmentPage() {
 
   const loadData = async () => {
     try {
-      const [doctorData, slotsData, healthRecordData] = await Promise.all([
-        patientApi.getDoctorById(doctorId!),
-        patientApi.getAvailableTimeSlots({ doctorId: doctorId!, date: date! }),
-        patientApi.getHealthRecord(),
-      ]);
+      const [doctorData, slotsData, servicesData, healthRecordData] =
+        await Promise.all([
+          patientApi.getDoctorById(doctorId!),
+          patientApi.getAvailableTimeSlots({
+            doctorId: doctorId!,
+            date: date!,
+          }),
+          patientApi.getServices(),
+          patientApi.getHealthRecord(),
+        ]);
 
       setDoctor(doctorData);
       const slot = slotsData.find((s) => s.id === timeSlotId);
       setTimeSlot(slot || null);
+
+      // Filter active services
+      const activeServices = servicesData.filter((s) => s.isActive);
+      setServices(activeServices);
+
+      // If serviceId is provided in URL, set it
+      if (serviceId) {
+        const serviceData = activeServices.find((s) => s.id === serviceId);
+        setService(serviceData || null);
+        setSelectedServiceId(serviceId);
+      } else if (activeServices.length > 0) {
+        // Auto-select first service if not provided
+        setSelectedServiceId(activeServices[0].id);
+        setService(activeServices[0]);
+      }
+
       setHealthRecord(healthRecordData);
 
       if (!healthRecordData) {
@@ -63,7 +90,10 @@ export default function ConfirmAppointmentPage() {
   };
 
   const handleSubmit = async () => {
-    if (!doctor || !timeSlot || !healthRecord) return;
+    if (!doctor || !timeSlot || !healthRecord || !selectedServiceId) {
+      setError("Vui lòng chọn dịch vụ trước khi đặt lịch");
+      return;
+    }
 
     setError("");
     setSubmitting(true);
@@ -72,9 +102,9 @@ export default function ConfirmAppointmentPage() {
       await patientApi.createAppointment({
         doctorId: doctor.id,
         timeSlotId: timeSlot.id,
+        serviceId: selectedServiceId,
         appointmentDate: date!,
         notes: notes.trim() || undefined,
-        serviceId: undefined,
       });
 
       setSuccess(true);
@@ -123,7 +153,7 @@ export default function ConfirmAppointmentPage() {
     );
   }
 
-  if (!doctor || !timeSlot || !healthRecord) {
+  if (!doctor || !timeSlot || !service || !healthRecord) {
     return (
       <PatientLayout>
         <div className="max-w-2xl mx-auto">
@@ -142,6 +172,13 @@ export default function ConfirmAppointmentPage() {
       </PatientLayout>
     );
   }
+
+  const formatPrice = (price: string) => {
+    return new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+    }).format(parseInt(price));
+  };
 
   return (
     <PatientLayout>
@@ -177,10 +214,8 @@ export default function ConfirmAppointmentPage() {
               <User className="h-5 w-5 text-gray-400 mt-0.5" />
               <div>
                 <p className="text-sm text-gray-600">Bác sĩ</p>
-                <p className="font-semibold text-gray-900">
-                  {doctor.user.fullName}
-                </p>
-                <p className="text-sm text-gray-600">{doctor.specialty.name}</p>
+                <p className="font-semibold text-gray-900">{doctor.fullName}</p>
+                <p className="text-sm text-gray-600">{doctor.specialty}</p>
               </div>
             </div>
 
@@ -189,12 +224,7 @@ export default function ConfirmAppointmentPage() {
               <div>
                 <p className="text-sm text-gray-600">Ngày khám</p>
                 <p className="font-semibold text-gray-900">
-                  {new Date(date!).toLocaleDateString("vi-VN", {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
+                  {formatDateLong(date!)}
                 </p>
               </div>
             </div>
@@ -207,6 +237,45 @@ export default function ConfirmAppointmentPage() {
                   {timeSlot.startTime.substring(0, 5)} -{" "}
                   {timeSlot.endTime.substring(0, 5)}
                 </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <DollarSign className="h-5 w-5 text-gray-400 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-gray-600 mb-2">Dịch vụ</p>
+                {serviceId && service ? (
+                  // Display selected service (from URL)
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      {service.name}
+                    </p>
+                    <p className="text-sm text-blue-600">
+                      {formatPrice(service.price)} - {service.duration} phút
+                    </p>
+                  </div>
+                ) : services.length > 0 ? (
+                  // Allow selecting service (no serviceId in URL)
+                  <select
+                    value={selectedServiceId}
+                    onChange={(e) => {
+                      setSelectedServiceId(e.target.value);
+                      const selected = services.find(
+                        (s) => s.id === e.target.value,
+                      );
+                      setService(selected || null);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {services.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} - {formatPrice(s.price)} ({s.duration} phút)
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-red-600">Không có dịch vụ khả dụng</p>
+                )}
               </div>
             </div>
           </div>
@@ -227,7 +296,9 @@ export default function ConfirmAppointmentPage() {
             <div>
               <p className="text-gray-600">Ngày sinh</p>
               <p className="font-medium text-gray-900">
-                {new Date(healthRecord.dateOfBirth).toLocaleDateString("vi-VN")}
+                {parseLocalDate(healthRecord.dateOfBirth).toLocaleDateString(
+                  "vi-VN",
+                )}
               </p>
             </div>
             <div>
@@ -273,8 +344,8 @@ export default function ConfirmAppointmentPage() {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={submitting}
-            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+            disabled={submitting || !selectedServiceId}
+            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             {submitting ? "Đang xử lý..." : "Xác nhận đặt lịch"}
           </button>

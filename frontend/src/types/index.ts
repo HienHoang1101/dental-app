@@ -104,6 +104,7 @@ export interface Service {
   price: string;
   duration: number;
   category?: string;
+  specialtyId?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -153,7 +154,7 @@ export interface Appointment {
 export interface CreateAppointmentRequest {
   doctorId: string;
   timeSlotId: string;
-  serviceId?: string;
+  serviceId: string; // Now required
   appointmentDate: string;
   notes?: string;
 }

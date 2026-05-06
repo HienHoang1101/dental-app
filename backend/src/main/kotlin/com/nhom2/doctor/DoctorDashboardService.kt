@@ -63,18 +63,19 @@ object DoctorDashboardService {
             // Build query - now Appointments references SupabaseDoctors.id directly
             var query = Appointments.select { Appointments.doctorId eq doctorId }
             
-            startDate?.let {
-                val date = LocalDate.parse(it)
+            // Check for non-empty string before parsing
+            if (!startDate.isNullOrBlank()) {
+                val date = LocalDate.parse(startDate)
                 query = query.andWhere { Appointments.appointmentDate greaterEq date }
             }
             
-            endDate?.let {
-                val date = LocalDate.parse(it)
+            if (!endDate.isNullOrBlank()) {
+                val date = LocalDate.parse(endDate)
                 query = query.andWhere { Appointments.appointmentDate lessEq date }
             }
             
-            status?.let {
-                query = query.andWhere { Appointments.status eq it }
+            if (!status.isNullOrBlank()) {
+                query = query.andWhere { Appointments.status eq status }
             }
             
             val total = query.count().toInt()
@@ -87,7 +88,6 @@ object DoctorDashboardService {
                     try {
                         it.toAppointmentDTO()
                     } catch (e: Exception) {
-                        println("Error mapping appointment: ${e.message}")
                         null
                     }
                 }
@@ -116,7 +116,6 @@ object DoctorDashboardService {
                     try {
                         it.toAppointmentDTO()
                     } catch (e: Exception) {
-                        println("Error mapping appointment: ${e.message}")
                         null
                     }
                 }
@@ -223,7 +222,6 @@ object DoctorDashboardService {
                     try {
                         it.toAppointmentSummaryDTO()
                     } catch (e: Exception) {
-                        println("Error mapping appointment summary: ${e.message}")
                         null
                     }
                 }
@@ -263,26 +261,77 @@ object DoctorDashboardService {
     // Register work schedule
     fun registerWorkSchedule(userId: UUID, request: RegisterWorkScheduleRequest): DoctorWorkScheduleDTO {
         return transaction {
-            val doctorId = SupabaseDoctors.select { SupabaseDoctors.userId eq userId }
-                .map { it[SupabaseDoctors.id] }
-                .singleOrNull() ?: throw IllegalArgumentException("Doctor not found")
-            
-            val workDate = LocalDate.parse(request.date)
-            val slotStart = LocalTime.of(9, 0)
-            val slotEnd = LocalTime.of(17, 0)
-            
-            val scheduleId = DoctorSchedules.insert {
-                it[DoctorSchedules.doctorId] = doctorId
-                it[DoctorSchedules.workDate] = workDate
-                it[DoctorSchedules.slotStart] = slotStart
-                it[DoctorSchedules.slotEnd] = slotEnd
-                it[isBooked] = false
-                it[createdAt] = Instant.now()
-            } get DoctorSchedules.id
-            
-            DoctorSchedules.select { DoctorSchedules.id eq scheduleId }
-                .map { it.toDoctorWorkScheduleDTO() }
-                .single()
+            try {
+                val doctorId = SupabaseDoctors.select { SupabaseDoctors.userId eq userId }
+                    .map { it[SupabaseDoctors.id] }
+                    .singleOrNull() ?: throw IllegalArgumentException("Doctor not found")
+                
+                val workDate = LocalDate.parse(request.date)
+                val shiftId = UUID.fromString(request.shiftId)
+                
+                // Get shift details
+                val shift = Shifts.select { Shifts.id eq shiftId }
+                    .singleOrNull() ?: throw IllegalArgumentException("Shift not found")
+                
+                val slotStart = shift[Shifts.startTime]
+                val slotEnd = shift[Shifts.endTime]
+                
+                // Check if work schedule already exists
+                val existingWorkSchedule = WorkSchedules.select {
+                    (WorkSchedules.doctorId eq doctorId) and 
+                    (WorkSchedules.shiftId eq shiftId) and 
+                    (WorkSchedules.date eq workDate)
+                }.singleOrNull()
+                
+                if (existingWorkSchedule != null) {
+                    throw IllegalArgumentException("Work schedule already exists for this doctor, shift, and date")
+                }
+                
+                // Create entry in doctor_schedules
+                val scheduleId = DoctorSchedules.insert {
+                    it[DoctorSchedules.doctorId] = doctorId
+                    it[DoctorSchedules.workDate] = workDate
+                    it[DoctorSchedules.slotStart] = slotStart
+                    it[DoctorSchedules.slotEnd] = slotEnd
+                    it[isBooked] = false
+                    it[createdAt] = Instant.now()
+                } get DoctorSchedules.id
+                
+                // Also create a work schedule in work_schedules table for compatibility
+                val workScheduleId = WorkSchedules.insert {
+                    it[WorkSchedules.doctorId] = doctorId
+                    it[WorkSchedules.shiftId] = shiftId
+                    it[WorkSchedules.date] = workDate
+                    it[WorkSchedules.slotDuration] = 30
+                    it[WorkSchedules.maxPatientPerSlot] = 1
+                    it[WorkSchedules.createdAt] = Instant.now()
+                } get WorkSchedules.id
+                
+                // Generate time slots
+                var currentTime = slotStart
+                val slotDuration = 30 // minutes
+                
+                while (currentTime.plusMinutes(slotDuration.toLong()) <= slotEnd) {
+                    val slotEndTime = currentTime.plusMinutes(slotDuration.toLong())
+                    
+                    TimeSlots.insert {
+                        it[TimeSlots.workScheduleId] = workScheduleId
+                        it[TimeSlots.startTime] = currentTime
+                        it[TimeSlots.endTime] = slotEndTime
+                        it[TimeSlots.maxPatientPerSlot] = 1
+                        it[TimeSlots.createdAt] = Instant.now()
+                    }
+                    
+                    currentTime = slotEndTime
+                }
+                
+                DoctorSchedules.select { DoctorSchedules.id eq scheduleId }
+                    .map { it.toDoctorWorkScheduleDTO() }
+                    .single()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                throw e
+            }
         }
     }
     
@@ -390,6 +439,7 @@ object DoctorDashboardService {
                     price = row[Services.price].toString(),
                     duration = row[Services.duration],
                     category = row[Services.category],
+                    specialtyId = row[Services.specialtyId]?.toString(),
                     isActive = row[Services.isActive],
                     createdAt = row[Services.createdAt].toString(),
                     updatedAt = null

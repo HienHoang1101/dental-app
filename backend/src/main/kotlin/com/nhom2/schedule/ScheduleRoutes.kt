@@ -184,12 +184,18 @@ fun Route.scheduleRoutes() {
                     val doctorId = UUID.fromString(call.request.queryParameters["doctorId"]!!)
                     val date = LocalDate.parse(call.request.queryParameters["date"]!!)
                     
+                    call.application.environment.log.info("Getting available slots for doctor: $doctorId, date: $date")
+                    
                     val slots = ScheduleService.getAvailableTimeSlots(doctorId, date)
+                    
+                    call.application.environment.log.info("Found ${slots.size} available slots")
+                    
                     call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = slots))
                 } catch (e: Exception) {
+                    call.application.environment.log.error("Error getting available slots", e)
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        ErrorResponse(error = "INVALID_REQUEST", message = "doctorId and date are required")
+                        ErrorResponse(error = "INVALID_REQUEST", message = "doctorId and date are required: ${e.message}")
                     )
                 }
             }

@@ -6,6 +6,7 @@ import PatientLayout from "@/components/layout/PatientLayout";
 import { patientApi } from "@/lib/patientApi";
 import { Appointment } from "@/types";
 import { Calendar, Clock, User, Plus, FileText, Bell } from "lucide-react";
+import { parseLocalDate } from "@/lib/dateUtils";
 
 export default function PatientDashboard() {
   const router = useRouter();
@@ -54,7 +55,7 @@ export default function PatientDashboard() {
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = parseLocalDate(dateStr);
     return date.toLocaleDateString("vi-VN", {
       weekday: "short",
       day: "2-digit",

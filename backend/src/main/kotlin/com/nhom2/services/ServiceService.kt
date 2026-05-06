@@ -18,6 +18,7 @@ object ServiceService {
                 it[price] = request.price
                 it[duration] = request.duration
                 it[category] = request.category
+                it[specialtyId] = request.specialtyId?.let { UUID.fromString(it) }
                 it[isActive] = true
                 it[createdAt] = Instant.now()
             } get Services.id
@@ -46,6 +47,30 @@ object ServiceService {
         }
     }
 
+    fun getServicesByCategory(category: String, activeOnly: Boolean = true): List<ServiceDTO> {
+        return transaction {
+            var query = Services.select { Services.category eq category }
+            
+            if (activeOnly) {
+                query = query.andWhere { Services.isActive eq true }
+            }
+            
+            query.map { it.toServiceDTO() }
+        }
+    }
+
+    fun getServicesBySpecialtyId(specialtyId: String, activeOnly: Boolean = true): List<ServiceDTO> {
+        return transaction {
+            var query = Services.select { Services.specialtyId eq UUID.fromString(specialtyId) }
+            
+            if (activeOnly) {
+                query = query.andWhere { Services.isActive eq true }
+            }
+            
+            query.map { it.toServiceDTO() }
+        }
+    }
+
     fun updateService(id: UUID, request: UpdateServiceRequest): ServiceDTO? {
         return transaction {
             val exists = Services.select { Services.id eq id }.count() > 0
@@ -57,6 +82,7 @@ object ServiceService {
                 request.price?.let { v -> it[price] = v }
                 request.duration?.let { v -> it[duration] = v }
                 request.category?.let { v -> it[category] = v }
+                request.specialtyId?.let { v -> it[specialtyId] = UUID.fromString(v) }
                 request.isActive?.let { v -> it[isActive] = v }
             }
 
@@ -77,6 +103,7 @@ object ServiceService {
         price = this[Services.price].toString(),
         duration = this[Services.duration],
         category = this[Services.category],
+        specialtyId = this[Services.specialtyId]?.toString(),
         isActive = this[Services.isActive],
         createdAt = this[Services.createdAt].toString(),
         updatedAt = null // Supabase doesn't have updated_at column

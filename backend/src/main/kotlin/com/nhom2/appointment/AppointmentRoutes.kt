@@ -26,17 +26,22 @@ fun Route.appointmentRoutes() {
                     }
 
                     val request = call.receive<CreateAppointmentRequest>()
+                    call.application.environment.log.info("Creating appointment for user $userId: $request")
+                    
                     val result = AppointmentService.createAppointment(userId, request)
                     
                     result.onSuccess { appointment ->
                         call.respond(HttpStatusCode.Created, ApiResponse(success = true, data = appointment))
                     }.onFailure { error ->
+                        call.application.environment.log.error("Failed to create appointment", error)
                         call.respond(
                             HttpStatusCode.BadRequest,
                             ErrorResponse(error = "CREATE_FAILED", message = error.message ?: "Failed to create appointment")
                         )
                     }
                 } catch (e: Exception) {
+                    call.application.environment.log.error("Error creating appointment", e)
+                    e.printStackTrace()
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")

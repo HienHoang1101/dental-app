@@ -20,6 +20,10 @@ object AppointmentService {
             val healthRecord = HealthRecordService.getHealthRecordByUserId(patientId)
                 ?: return@transaction Result.failure(Exception("Health record not found. Please create one first."))
 
+            // Validate service exists
+            val service = ServiceService.getServiceById(UUID.fromString(request.serviceId))
+                ?: return@transaction Result.failure(Exception("Service not found"))
+
             // Validate time slot availability
             val timeSlot = TimeSlots.select { TimeSlots.id eq UUID.fromString(request.timeSlotId) }
                 .singleOrNull() ?: return@transaction Result.failure(Exception("Time slot not found"))
@@ -34,6 +38,47 @@ object AppointmentService {
                 return@transaction Result.failure(Exception("Time slot is fully booked"))
             }
 
+            // Get work_schedule_id from time_slot
+            val workScheduleId = timeSlot[TimeSlots.workScheduleId]
+            
+            // Get work_schedule to find doctor_id, shift_id, and date
+            val workSchedule = WorkSchedules.select { WorkSchedules.id eq workScheduleId }
+                .singleOrNull() ?: return@transaction Result.failure(Exception("Work schedule not found"))
+            
+            val doctorIdFromSchedule = workSchedule[WorkSchedules.doctorId]
+            val shiftId = workSchedule[WorkSchedules.shiftId]
+            val scheduleDate = workSchedule[WorkSchedules.date]
+            
+            // Find or create corresponding doctor_schedule
+            // Note: doctor_schedules is a legacy table, we need to find the matching one
+            // based on doctor, date, and time range that overlaps with the shift
+            val shift = Shifts.select { Shifts.id eq shiftId }.singleOrNull()
+                ?: return@transaction Result.failure(Exception("Shift not found"))
+            
+            val shiftStartTime = shift[Shifts.startTime]
+            val shiftEndTime = shift[Shifts.endTime]
+            
+            // Find doctor_schedule that matches doctor, date, and overlaps with shift time
+            val doctorSchedule = DoctorSchedules.select {
+                (DoctorSchedules.doctorId eq doctorIdFromSchedule) and
+                (DoctorSchedules.workDate eq scheduleDate) and
+                (DoctorSchedules.slotStart eq shiftStartTime)
+            }.singleOrNull()
+            
+            val scheduleId = if (doctorSchedule != null) {
+                doctorSchedule[DoctorSchedules.id]
+            } else {
+                // Create a new doctor_schedule entry if not exists
+                DoctorSchedules.insert {
+                    it[doctorId] = doctorIdFromSchedule
+                    it[workDate] = scheduleDate
+                    it[slotStart] = shiftStartTime
+                    it[slotEnd] = shiftEndTime
+                    it[isBooked] = false
+                    it[createdAt] = Instant.now()
+                } get DoctorSchedules.id
+            }
+
             // Validate appointment date
             val appointmentDate = LocalDate.parse(request.appointmentDate)
             val isHoliday = Holidays.select { Holidays.date eq appointmentDate }.count() > 0
@@ -44,10 +89,11 @@ object AppointmentService {
             // Create appointment
             val id = Appointments.insert {
                 it[Appointments.patientId] = patientId
-                it[doctorId] = UUID.fromString(request.doctorId)
-                it[healthRecordId] = UUID.fromString(healthRecord.id)
-                it[timeSlotId] = UUID.fromString(request.timeSlotId)
-                it[serviceId] = request.serviceId?.let { UUID.fromString(it) }
+                it[Appointments.doctorId] = UUID.fromString(request.doctorId)
+                it[Appointments.healthRecordId] = UUID.fromString(healthRecord.id)
+                it[Appointments.scheduleId] = scheduleId
+                it[Appointments.timeSlotId] = UUID.fromString(request.timeSlotId)
+                it[Appointments.serviceId] = UUID.fromString(request.serviceId)
                 it[Appointments.appointmentDate] = appointmentDate
                 it[status] = "pending"
                 it[notes] = request.notes
@@ -239,6 +285,9 @@ object AppointmentService {
         startTime = this[TimeSlots.startTime].toString(),
         endTime = this[TimeSlots.endTime].toString(),
         maxPatientPerSlot = this[TimeSlots.maxPatientPerSlot],
+        currentBookings = 0,
+        remainingCapacity = this[TimeSlots.maxPatientPerSlot],
+        isAvailable = true,
         createdAt = this[TimeSlots.createdAt].toString()
     )
 }

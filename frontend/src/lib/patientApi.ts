@@ -5,6 +5,7 @@ import {
   Specialty,
   Doctor,
   DoctorFilter,
+  Service,
   TimeSlot,
   Appointment,
   CreateAppointmentRequest,
@@ -66,6 +67,26 @@ export const patientApi = {
   getDoctorById: async (id: string): Promise<Doctor> => {
     const response = await api.get<ApiResponse<Doctor>>(`/doctors/${id}`);
     return response.data.data!;
+  },
+
+  // Services
+  getServices: async (
+    category?: string,
+    specialtyId?: string,
+  ): Promise<Service[]> => {
+    const response = await api.get<ApiResponse<Service[]>>("/services", {
+      params: { category, specialtyId, activeOnly: true },
+    });
+    return response.data.data || [];
+  },
+
+  getServiceById: async (id: string): Promise<Service> => {
+    const response = await api.get<ApiResponse<Service>>(`/services/${id}`);
+    return response.data.data!;
+  },
+
+  getServicesByCategory: async (category: string): Promise<Service[]> => {
+    return patientApi.getServices(category);
   },
 
   // Work Schedules & Time Slots

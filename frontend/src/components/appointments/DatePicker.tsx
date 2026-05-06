@@ -58,8 +58,11 @@ export default function DatePicker({
   };
 
   const formatDate = (day: number) => {
-    const date = new Date(year, month, day);
-    return date.toISOString().split("T")[0];
+    // Format date as YYYY-MM-DD without timezone conversion
+    const yearStr = year.toString();
+    const monthStr = (month + 1).toString().padStart(2, "0");
+    const dayStr = day.toString().padStart(2, "0");
+    return `${yearStr}-${monthStr}-${dayStr}`;
   };
 
   const isDateDisabled = (day: number) => {
@@ -69,7 +72,9 @@ export default function DatePicker({
     today.setHours(0, 0, 0, 0);
 
     if (minDate) {
-      const min = new Date(minDate);
+      // Parse minDate properly to avoid timezone issues
+      const [minYear, minMonth, minDay] = minDate.split("-").map(Number);
+      const min = new Date(minYear, minMonth - 1, minDay);
       min.setHours(0, 0, 0, 0);
       if (date < min) return true;
     }

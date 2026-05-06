@@ -12,7 +12,6 @@ object DatabaseConfig {
         val dot = try {
             dotenv { ignoreIfMissing = true }
         } catch (t: Throwable) {
-            println("⚠️ Warning: Failed to load .env file: ${t.message}")
             null
         }
 
@@ -31,7 +30,6 @@ object DatabaseConfig {
                     }
                     .fold(mutableMapOf<String, String>()) { acc, (k, v) -> acc.apply { this[k] = v } }
             } catch (t: Throwable) {
-                println("⚠️ Warning: Failed to parse .env file: ${t.message}")
                 emptyMap<String, String>()
             }
         }
@@ -41,10 +39,6 @@ object DatabaseConfig {
         val dbUrl = envGet("DATABASE_URL") ?: error("DATABASE_URL is not set")
         val dbUser = envGet("DATABASE_USER") ?: error("DATABASE_USER is not set")
         val dbPassword = envGet("DATABASE_PASSWORD") ?: ""
-        
-        // DEBUG: Print connection info
-        println("🔗 Connecting to: $dbUrl")
-        println("👤 User: $dbUser")
 
         // Auto-detect driver based on URL
         val driver = when {
@@ -52,7 +46,6 @@ object DatabaseConfig {
             dbUrl.contains("postgresql") -> "org.postgresql.Driver"
             else -> "org.postgresql.Driver"
         }
-        println("🚗 Using driver: $driver")
 
         Database.connect(
             url = dbUrl,
@@ -60,7 +53,6 @@ object DatabaseConfig {
             user = dbUser,
             password = dbPassword
         )
-        println("✅ Database connected successfully")
 
         // Create tables for H2, skip for PostgreSQL/Supabase
         if (dbUrl.contains("h2")) {
@@ -81,9 +73,8 @@ object DatabaseConfig {
                         Notifications
                     )
                 }
-                println("✅ H2 database schema created successfully")
             } catch (t: Throwable) {
-                println("⚠️ Warning: could not create schema: ${t.message}")
+                // Schema creation failed
             }
         } else {
             // Verify Supabase/PostgreSQL connection
@@ -91,9 +82,8 @@ object DatabaseConfig {
                 transaction {
                     exec("SELECT 1") { }
                 }
-                println("✅ PostgreSQL/Supabase connection verified")
             } catch (t: Throwable) {
-                println("⚠️ Warning: could not verify database connection: ${t.message}")
+                // Connection verification failed
             }
         }
     }

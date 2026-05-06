@@ -29,7 +29,7 @@ export default function BookBySpecialtyPage() {
 
   const handleSelectSpecialty = (specialtyId: string) => {
     router.push(
-      `/patient/appointments/book/by-specialty/select-date?specialtyId=${specialtyId}`,
+      `/patient/appointments/book/by-specialty/select-service?specialtyId=${specialtyId}`,
     );
   };
 

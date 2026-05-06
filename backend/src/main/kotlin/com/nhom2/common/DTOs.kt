@@ -229,6 +229,7 @@ data class ServiceDTO(
     val price: String, // returned as string for display
     val duration: Int,
     val category: String?,
+    val specialtyId: String?,
     val isActive: Boolean,
     val createdAt: String,
     val updatedAt: String?
@@ -240,7 +241,8 @@ data class CreateServiceRequest(
     val description: String? = null,
     val price: Int,
     val duration: Int,
-    val category: String? = null
+    val category: String? = null,
+    val specialtyId: String? = null
 )
 
 @Serializable
@@ -250,6 +252,7 @@ data class UpdateServiceRequest(
     val price: Int? = null,
     val duration: Int? = null,
     val category: String? = null,
+    val specialtyId: String? = null,
     val isActive: Boolean? = null
 )
 
@@ -324,9 +327,9 @@ data class TimeSlotDTO(
     val startTime: String,
     val endTime: String,
     val maxPatientPerSlot: Int,
-    val currentBookings: Int = 0,
-    val remainingCapacity: Int = 0,
-    val isAvailable: Boolean = true,
+    val currentBookings: Int,
+    val remainingCapacity: Int,
+    val isAvailable: Boolean,
     val createdAt: String
 )
 
@@ -364,9 +367,9 @@ data class AppointmentSummaryDTO(
 data class CreateAppointmentRequest(
     val doctorId: String,
     val timeSlotId: String,
-    val serviceId: String?,
+    val serviceId: String, // Required now
     val appointmentDate: String,
-    val notes: String?
+    val notes: String? = null
 )
 
 @Serializable

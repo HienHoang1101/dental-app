@@ -12,11 +12,19 @@ import java.util.UUID
 
 fun Route.serviceRoutes() {
     route("/services") {
-        // Public: Get all active services
+        // Public: Get all active services (with optional category or specialty filter)
         get {
             try {
                 val activeOnly = call.request.queryParameters["activeOnly"]?.toBoolean() ?: true
-                val services = ServiceService.getAllServices(activeOnly)
+                val category = call.request.queryParameters["category"]
+                val specialtyId = call.request.queryParameters["specialtyId"]
+                
+                val services = when {
+                    specialtyId != null -> ServiceService.getServicesBySpecialtyId(specialtyId, activeOnly)
+                    category != null -> ServiceService.getServicesByCategory(category, activeOnly)
+                    else -> ServiceService.getAllServices(activeOnly)
+                }
+                
                 call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = services))
             } catch (e: Exception) {
                 call.respond(

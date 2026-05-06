@@ -7,6 +7,7 @@ import DatePicker from "@/components/appointments/DatePicker";
 import { patientApi } from "@/lib/patientApi";
 import { Holiday } from "@/types";
 import { ArrowLeft } from "lucide-react";
+import { getTodayString } from "@/lib/dateUtils";
 
 export default function BookByDatePage() {
   const router = useRouter();
@@ -42,7 +43,7 @@ export default function BookByDatePage() {
   };
 
   const disabledDates = holidays.map((h) => h.date);
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayString();
 
   if (loading) {
     return (
