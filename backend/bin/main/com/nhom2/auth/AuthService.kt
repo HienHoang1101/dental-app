@@ -11,11 +11,14 @@ import java.util.*
 
 object AuthService {
     fun register(request: RegisterRequest): LoginResponse {
+        // Validate input
+        validateRegistrationInput(request)
+        
         return transaction {
             // Check if user already exists
             val existingUser = Users.select { Users.email eq request.email }.singleOrNull()
             if (existingUser != null) {
-                throw IllegalArgumentException("User with this email already exists")
+                throw IllegalArgumentException("Email đã được sử dụng. Vui lòng sử dụng email khác.")
             }
 
             // Hash password
@@ -23,10 +26,10 @@ object AuthService {
 
             // Insert user
             val userId = Users.insert {
-                it[email] = request.email
+                it[email] = request.email.trim().lowercase()
                 it[passwordHash] = hashedPassword
-                it[fullName] = request.fullName
-                it[phone] = request.phone
+                it[fullName] = request.fullName.trim()
+                it[phone] = request.phone?.trim()
                 it[role] = "patient"
                 it[isActive] = true
                 it[createdAt] = Instant.now()
@@ -42,25 +45,55 @@ object AuthService {
             LoginResponse(token = token, user = user)
         }
     }
+    
+    private fun validateRegistrationInput(request: RegisterRequest) {
+        // Validate email format
+        val emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$".toRegex()
+        if (!emailRegex.matches(request.email.trim())) {
+            throw IllegalArgumentException("Email không hợp lệ. Vui lòng nhập đúng định dạng email.")
+        }
+        
+        // Validate password strength
+        if (request.password.length < 6) {
+            throw IllegalArgumentException("Mật khẩu phải có ít nhất 6 ký tự.")
+        }
+        
+        // Validate full name
+        if (request.fullName.trim().isEmpty()) {
+            throw IllegalArgumentException("Họ tên không được để trống.")
+        }
+        
+        if (request.fullName.trim().length < 2) {
+            throw IllegalArgumentException("Họ tên phải có ít nhất 2 ký tự.")
+        }
+        
+        // Validate phone if provided
+        request.phone?.let { phone ->
+            val phoneRegex = "^[0-9]{10,11}$".toRegex()
+            if (phone.trim().isNotEmpty() && !phoneRegex.matches(phone.trim())) {
+                throw IllegalArgumentException("Số điện thoại không hợp lệ. Vui lòng nhập 10-11 chữ số.")
+            }
+        }
+    }
 
     fun login(request: LoginRequest): LoginResponse {
         return transaction {
-            // Find user by email
-            val user = Users.select { Users.email eq request.email }.singleOrNull()
-                ?: throw IllegalArgumentException("Invalid email or password")
+            // Find user by email (case-insensitive)
+            val user = Users.select { Users.email eq request.email.trim().lowercase() }.singleOrNull()
+                ?: throw IllegalArgumentException("Email hoặc mật khẩu không đúng.")
 
             // Verify password
             val passwordHash = user[Users.passwordHash]
-                ?: throw IllegalArgumentException("Invalid email or password")
+                ?: throw IllegalArgumentException("Email hoặc mật khẩu không đúng.")
 
             val result = BCrypt.verifyer().verify(request.password.toCharArray(), passwordHash)
             if (!result.verified) {
-                throw IllegalArgumentException("Invalid email or password")
+                throw IllegalArgumentException("Email hoặc mật khẩu không đúng.")
             }
 
             // Check if user is active
             if (!user[Users.isActive]) {
-                throw IllegalArgumentException("User account is deactivated")
+                throw IllegalArgumentException("Tài khoản đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.")
             }
 
             // Generate JWT token

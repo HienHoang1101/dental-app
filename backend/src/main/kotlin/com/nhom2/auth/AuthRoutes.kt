@@ -17,12 +17,12 @@ fun Route.authRoutes() {
             } catch (e: IllegalArgumentException) {
                 call.respond(
                     HttpStatusCode.BadRequest,
-                    ErrorResponse(error = "REGISTRATION_FAILED", message = e.message ?: "Registration failed")
+                    ErrorResponse(error = "REGISTRATION_FAILED", message = e.message ?: "Đăng ký thất bại")
                 )
             } catch (e: Exception) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse(error = "SERVER_ERROR", message = "An error occurred during registration")
+                    ErrorResponse(error = "SERVER_ERROR", message = "Đã xảy ra lỗi trong quá trình đăng ký. Vui lòng thử lại sau.")
                 )
             }
         }
@@ -35,12 +35,12 @@ fun Route.authRoutes() {
             } catch (e: IllegalArgumentException) {
                 call.respond(
                     HttpStatusCode.Unauthorized,
-                    ErrorResponse(error = "LOGIN_FAILED", message = e.message ?: "Login failed")
+                    ErrorResponse(error = "LOGIN_FAILED", message = e.message ?: "Đăng nhập thất bại")
                 )
             } catch (e: Exception) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse(error = "SERVER_ERROR", message = "An error occurred during login")
+                    ErrorResponse(error = "SERVER_ERROR", message = "Đã xảy ra lỗi trong quá trình đăng nhập. Vui lòng thử lại sau.")
                 )
             }
         }

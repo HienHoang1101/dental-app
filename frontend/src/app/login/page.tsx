@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { authApi } from "@/lib/authApi";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -42,6 +43,15 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-8 shadow">
         <div>
           <h2 className="text-center text-3xl font-bold">Đăng nhập</h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Chưa có tài khoản?{" "}
+            <Link
+              href="/register"
+              className="text-blue-600 hover:text-blue-700"
+            >
+              Đăng ký ngay
+            </Link>
+          </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
