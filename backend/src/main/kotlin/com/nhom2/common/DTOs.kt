@@ -460,6 +460,20 @@ data class PatientListResponse(
     val total: Int
 )
 
+// ── Doctor Schedule DTOs ─────────────────────────
+@Serializable
+data class DoctorScheduleResponse(
+    val id: String,
+    val doctorId: String,
+    val doctorName: String,
+    val specialty: String,
+    val workDate: String,
+    val slotStart: String,
+    val slotEnd: String,
+    val isBooked: Boolean,
+    val createdAt: String
+)
+
 // ── Filter/Search DTOs ───────────────────────────
 @Serializable
 data class DoctorFilterRequest(

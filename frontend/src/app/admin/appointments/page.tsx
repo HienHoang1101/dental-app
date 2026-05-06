@@ -103,6 +103,9 @@ export default function AppointmentsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Trạng thái
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Thao tác
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -136,6 +139,16 @@ export default function AppointmentsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(appointment.status)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() =>
+                        (window.location.href = `/admin/appointments/${appointment.id}`)
+                      }
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      Chi tiết
+                    </button>
                   </td>
                 </tr>
               ))}

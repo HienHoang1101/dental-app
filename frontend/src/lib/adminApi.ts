@@ -274,6 +274,16 @@ export const adminApi = {
     return response.data.data || [];
   },
 
+  getDoctorSchedules: async (date: string): Promise<any[]> => {
+    const response = await api.get<ApiResponse<any[]>>(
+      "/admin/doctor-schedules",
+      {
+        params: { date },
+      },
+    );
+    return response.data.data || [];
+  },
+
   createWorkSchedule: async (data: {
     doctorId: string;
     shiftId: string;

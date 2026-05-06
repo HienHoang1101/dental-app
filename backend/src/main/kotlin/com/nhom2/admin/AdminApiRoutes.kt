@@ -206,20 +206,21 @@ fun Route.adminApiRoutes() {
                         Users.selectAll()
                             .orderBy(Users.createdAt to SortOrder.DESC)
                             .map { row ->
-                                mapOf(
-                                    "id" to row[Users.id].toString(),
-                                    "email" to row[Users.email],
-                                    "fullName" to row[Users.fullName],
-                                    "phone" to row[Users.phone],
-                                    "role" to row[Users.role],
-                                    "isActive" to row[Users.isActive],
-                                    "createdAt" to row[Users.createdAt].toString(),
-                                    "updatedAt" to row[Users.updatedAt].toString()
+                                UserDTO(
+                                    id = row[Users.id].toString(),
+                                    email = row[Users.email],
+                                    fullName = row[Users.fullName],
+                                    phone = row[Users.phone],
+                                    role = row[Users.role],
+                                    isActive = row[Users.isActive],
+                                    createdAt = row[Users.createdAt].toString(),
+                                    updatedAt = row[Users.updatedAt].toString()
                                 )
                             }
                     }
                     call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = users))
                 } catch (e: Exception) {
+                    e.printStackTrace()
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
@@ -499,17 +500,107 @@ fun Route.adminApiRoutes() {
                 }
             }
 
-            // Get doctor schedules
+            // Get doctor schedules by doctor ID
             get("/doctors/{doctorId}/schedules") {
                 try {
                     val doctorId = UUID.fromString(call.parameters["doctorId"])
                     val date = call.request.queryParameters["date"]
                     
-                    // This is a placeholder - you'll need to implement actual schedule logic
-                    val schedules = emptyList<Map<String, Any>>()
+                    val schedules = transaction {
+                        val query = if (date != null) {
+                            DoctorSchedules.select { 
+                                (DoctorSchedules.doctorId eq doctorId) and 
+                                (DoctorSchedules.workDate eq java.time.LocalDate.parse(date))
+                            }
+                        } else {
+                            DoctorSchedules.select { DoctorSchedules.doctorId eq doctorId }
+                        }
+                        
+                        query.map { row ->
+                            mapOf(
+                                "id" to row[DoctorSchedules.id].toString(),
+                                "doctorId" to row[DoctorSchedules.doctorId].toString(),
+                                "workDate" to row[DoctorSchedules.workDate].toString(),
+                                "slotStart" to row[DoctorSchedules.slotStart].toString(),
+                                "slotEnd" to row[DoctorSchedules.slotEnd].toString(),
+                                "isBooked" to row[DoctorSchedules.isBooked],
+                                "createdAt" to row[DoctorSchedules.createdAt].toString()
+                            )
+                        }
+                    }
                     
                     call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = schedules))
                 } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
+                    )
+                }
+            }
+
+            // Get all doctor schedules (for admin view)
+            get("/doctor-schedules") {
+                try {
+                    val date = call.request.queryParameters["date"]
+                    println("=== DEBUG: Getting doctor schedules for date: $date ===")
+                    
+                    val schedules = transaction {
+                        try {
+                            // First, check if we have any schedules at all
+                            val totalCount = DoctorSchedules.selectAll().count()
+                            println("Total schedules in database: $totalCount")
+                            
+                            val baseQuery = if (date != null) {
+                                val parsedDate = java.time.LocalDate.parse(date)
+                                println("Parsed date: $parsedDate")
+                                DoctorSchedules.select { DoctorSchedules.workDate eq parsedDate }
+                            } else {
+                                DoctorSchedules.selectAll()
+                            }
+                            
+                            val scheduleCount = baseQuery.count()
+                            println("Schedules found for query: $scheduleCount")
+                            
+                            baseQuery.map { scheduleRow ->
+                                val doctorId = scheduleRow[DoctorSchedules.doctorId]
+                                println("Processing schedule for doctor ID: $doctorId")
+                                
+                                // Query doctor info separately to avoid join issues
+                                val doctor = try {
+                                    SupabaseDoctors.select { SupabaseDoctors.id eq doctorId }.singleOrNull()
+                                } catch (e: Exception) {
+                                    println("Error fetching doctor $doctorId: ${e.message}")
+                                    null
+                                }
+                                
+                                val doctorName = doctor?.get(SupabaseDoctors.fullName) ?: "Unknown"
+                                val specialty = doctor?.get(SupabaseDoctors.specialty) ?: "Unknown"
+                                println("Doctor: $doctorName, Specialty: $specialty")
+                                
+                                DoctorScheduleResponse(
+                                    id = scheduleRow[DoctorSchedules.id].toString(),
+                                    doctorId = doctorId.toString(),
+                                    doctorName = doctorName,
+                                    specialty = specialty,
+                                    workDate = scheduleRow[DoctorSchedules.workDate].toString(),
+                                    slotStart = scheduleRow[DoctorSchedules.slotStart].toString(),
+                                    slotEnd = scheduleRow[DoctorSchedules.slotEnd].toString(),
+                                    isBooked = scheduleRow[DoctorSchedules.isBooked],
+                                    createdAt = scheduleRow[DoctorSchedules.createdAt].toString()
+                                )
+                            }
+                        } catch (e: Exception) {
+                            println("Error in transaction: ${e.message}")
+                            e.printStackTrace()
+                            throw e
+                        }
+                    }
+                    
+                    println("Returning ${schedules.size} schedules")
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = schedules))
+                } catch (e: Exception) {
+                    println("=== ERROR in doctor-schedules endpoint ===")
+                    e.printStackTrace()
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")

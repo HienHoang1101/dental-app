@@ -5,6 +5,17 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import { adminApi } from "@/lib/adminApi";
 import { Service } from "@/types";
 
+const SERVICE_CATEGORIES = [
+  { value: "examination", label: "Khám tổng quát" },
+  { value: "treatment", label: "Điều trị" },
+  { value: "surgery", label: "Phẫu thuật" },
+  { value: "cosmetic", label: "Thẩm mỹ" },
+  { value: "orthodontics", label: "Chỉnh nha" },
+  { value: "implant", label: "Cấy ghép" },
+  { value: "cleaning", label: "Vệ sinh răng miệng" },
+  { value: "other", label: "Khác" },
+];
+
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -287,14 +298,20 @@ export default function ServicesPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Danh mục
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.category}
                     onChange={(e) =>
                       setFormData({ ...formData, category: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  />
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- Chọn danh mục --</option>
+                    {SERVICE_CATEGORIES.map((cat) => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button
