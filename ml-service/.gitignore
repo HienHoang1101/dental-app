@@ -1,0 +1,27 @@
+# Model files (large; regenerate from notebook)
+models/svm_pipeline.joblib
+models/phobert_best/
+models/phobert_best.zip
+models/__results___files/
+models/__huggingface_repos__.json
+models/*.png
+models/*.OLD
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv-py313-backup/
+venv/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
