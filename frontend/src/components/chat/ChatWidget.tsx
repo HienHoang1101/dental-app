@@ -5,7 +5,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { MessageCircle, X, Send, Loader2 } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, Plus, History } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useAuthStore } from "@/stores/authStore";
 import { ML_LABEL_NAMES } from "@/types/chat";
@@ -25,7 +25,9 @@ export function ChatWidget() {
     openChat,
     closeChat,
     sendMessage,
+    startNewSession,
     clearError,
+    reset,
   } = useChatStore();
 
   const [input, setInput] = useState("");
@@ -76,13 +78,31 @@ export function ChatWidget() {
           <MessageCircle className="w-5 h-5" />
           <h3 className="font-semibold">Chat tư vấn nha khoa</h3>
         </div>
-        <button
-          onClick={closeChat}
-          className="hover:bg-blue-700 rounded p-1 transition-colors"
-          aria-label="Close chat"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => startNewSession()}
+            className="hover:bg-blue-700 rounded p-1 transition-colors"
+            title="Cuộc trò chuyện mới"
+            aria-label="New chat"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => (window.location.href = "/patient/chat-history")}
+            className="hover:bg-blue-700 rounded p-1 transition-colors"
+            title="Lịch sử trò chuyện"
+            aria-label="Chat history"
+          >
+            <History className="w-5 h-5" />
+          </button>
+          <button
+            onClick={closeChat}
+            className="hover:bg-blue-700 rounded p-1 transition-colors ml-1"
+            aria-label="Close chat"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}

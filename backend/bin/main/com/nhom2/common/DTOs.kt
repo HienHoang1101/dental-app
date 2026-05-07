@@ -60,7 +60,8 @@ data class UserDTO(
     val role: String,
     val isActive: Boolean,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    val doctorId: String? = null
 )
 
 @Serializable
@@ -366,9 +367,9 @@ data class AppointmentSummaryDTO(
 @Serializable
 data class CreateAppointmentRequest(
     val doctorId: String,
-    val timeSlotId: String,
+    val timeSlotId: String? = null,
     val serviceId: String, // Required now
-    val appointmentDate: String,
+    val appointmentDate: String? = null,
     val notes: String? = null
 )
 
@@ -662,7 +663,8 @@ data class CreateAppointmentRequestV2(
     val endTime: String, // ISO 8601 timestamp
     val serviceId: String,
     val notes: String? = null,
-    val parentAppointmentId: String? = null // For follow-ups
+    val parentAppointmentId: String? = null, // For follow-ups
+    val chatSessionId: String? = null // Link to chat session for doctor review
 )
 
 @Serializable

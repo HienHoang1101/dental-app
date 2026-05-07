@@ -1,8 +1,28 @@
 package com.nhom2.models
 
+import org.jetbrains.exposed.sql.Column
+import org.jetbrains.exposed.sql.StringColumnType
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.javatime.*
+import org.jetbrains.exposed.sql.statements.api.PreparedStatementApi
+import org.postgresql.util.PGobject
 import java.time.Instant
+
+class JsonBColumnType : StringColumnType() {
+    override fun sqlType(): String = "JSONB"
+    override fun setParameter(stmt: PreparedStatementApi, index: Int, value: Any?) {
+        val obj = PGobject()
+        obj.type = "jsonb"
+        obj.value = value as String?
+        stmt[index] = obj
+    }
+    override fun valueFromDB(value: Any): Any {
+        if (value is PGobject) return value.value ?: ""
+        return super.valueFromDB(value)
+    }
+}
+
+fun Table.jsonb(name: String): Column<String> = registerColumn(name, JsonBColumnType())
 
 /**
  * New tables for Weekly Scheduling V2
@@ -43,8 +63,8 @@ object ScheduleChangeRequests : Table("schedule_change_requests") {
     val id              = uuid("id").autoGenerate()
     val doctorId        = uuid("doctor_id").references(SupabaseDoctors.id)
     val requestType     = text("request_type") // add, remove, modify
-    val oldScheduleData = text("old_schedule_data").nullable() // JSON string
-    val newScheduleData = text("new_schedule_data").nullable() // JSON string
+    val oldScheduleData = jsonb("old_schedule_data").nullable() // JSON string
+    val newScheduleData = jsonb("new_schedule_data").nullable() // JSON string
     val status          = text("status").default("pending") // pending, approved, rejected
     val rejectionReason = text("rejection_reason").nullable()
     val reviewedBy      = uuid("reviewed_by").references(Users.id).nullable()

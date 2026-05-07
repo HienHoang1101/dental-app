@@ -131,6 +131,13 @@ export const patientApi = {
     return response.data.data?.slots || [];
   },
 
+  getWeeklySchedulesV2: async (doctorId: string): Promise<Array<{ dayOfWeek: number; isActive: boolean }>> => {
+    const response = await api.get<ApiResponse<Array<{ dayOfWeek: number; isActive: boolean }>>>(
+      `/doctors/${doctorId}/weekly-schedules`
+    );
+    return response.data.data || [];
+  },
+
   // Holidays
   getHolidays: async (): Promise<Holiday[]> => {
     const response = await api.get<ApiResponse<Holiday[]>>(

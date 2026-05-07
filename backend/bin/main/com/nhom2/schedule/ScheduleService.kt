@@ -5,6 +5,9 @@ import com.nhom2.models.*
 import com.nhom2.doctors.SupabaseDoctorService
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.LocalDate
 import java.time.LocalTime
@@ -16,10 +19,29 @@ object ScheduleService {
     // ── Shift Management ─────────────────────────────
     fun createShift(request: CreateShiftRequest): ShiftDTO {
         return transaction {
+            val startTime = LocalTime.parse(request.startTime)
+            val endTime = LocalTime.parse(request.endTime)
+            
+            // Validate working hours - only allow morning (8:00-12:00) and afternoon (13:30-17:30)
+            val isValidMorningShift = startTime >= LocalTime.of(8, 0) && endTime <= LocalTime.of(12, 0)
+            val isValidAfternoonShift = startTime >= LocalTime.of(13, 30) && endTime <= LocalTime.of(17, 30)
+            
+            if (!isValidMorningShift && !isValidAfternoonShift) {
+                throw IllegalArgumentException(
+                    "Invalid shift time. Only morning shifts (08:00-12:00) and afternoon shifts (13:30-17:30) are allowed. " +
+                    "Provided: ${request.startTime}-${request.endTime}"
+                )
+            }
+            
+            // Validate that start time is before end time
+            if (startTime >= endTime) {
+                throw IllegalArgumentException("Start time must be before end time")
+            }
+            
             val id = Shifts.insert {
                 it[name] = request.name
-                it[startTime] = LocalTime.parse(request.startTime)
-                it[endTime] = LocalTime.parse(request.endTime)
+                it[Shifts.startTime] = startTime
+                it[Shifts.endTime] = endTime
                 it[createdAt] = Instant.now()
             } get Shifts.id
 
@@ -45,6 +67,31 @@ object ScheduleService {
         return transaction {
             val exists = Shifts.select { Shifts.id eq id }.count() > 0
             if (!exists) return@transaction null
+
+            // Get current shift data
+            val currentShift = Shifts.select { Shifts.id eq id }.single()
+            val currentStartTime = currentShift[Shifts.startTime]
+            val currentEndTime = currentShift[Shifts.endTime]
+            
+            // Determine new times (use current if not provided in request)
+            val newStartTime = request.startTime?.let { LocalTime.parse(it) } ?: currentStartTime
+            val newEndTime = request.endTime?.let { LocalTime.parse(it) } ?: currentEndTime
+            
+            // Validate working hours - only allow morning (8:00-12:00) and afternoon (13:30-17:30)
+            val isValidMorningShift = newStartTime >= LocalTime.of(8, 0) && newEndTime <= LocalTime.of(12, 0)
+            val isValidAfternoonShift = newStartTime >= LocalTime.of(13, 30) && newEndTime <= LocalTime.of(17, 30)
+            
+            if (!isValidMorningShift && !isValidAfternoonShift) {
+                throw IllegalArgumentException(
+                    "Invalid shift time. Only morning shifts (08:00-12:00) and afternoon shifts (13:30-17:30) are allowed. " +
+                    "Provided: $newStartTime-$newEndTime"
+                )
+            }
+            
+            // Validate that start time is before end time
+            if (newStartTime >= newEndTime) {
+                throw IllegalArgumentException("Start time must be before end time")
+            }
 
             Shifts.update({ Shifts.id eq id }) {
                 request.name?.let { v -> it[name] = v }
@@ -187,9 +234,17 @@ object ScheduleService {
 
     fun getAvailableTimeSlots(doctorId: UUID, date: LocalDate): List<TimeSlotDTO> {
         return transaction {
-            val workSchedules = WorkSchedules.select {
-                (WorkSchedules.doctorId eq doctorId) and (WorkSchedules.date eq date)
-            }
+            val workSchedules = WorkSchedules
+                .join(Shifts, JoinType.INNER) { WorkSchedules.shiftId eq Shifts.id }
+                .select {
+                    (WorkSchedules.doctorId eq doctorId) and 
+                    (WorkSchedules.date eq date) and
+                    // ONLY INCLUDE VALID SHIFTS (working hours)
+                    (
+                        ((Shifts.startTime greaterEq LocalTime.of(8, 0)) and (Shifts.endTime lessEq LocalTime.of(12, 0))) or
+                        ((Shifts.startTime greaterEq LocalTime.of(13, 30)) and (Shifts.endTime lessEq LocalTime.of(17, 30)))
+                    )
+                }
 
             val result = workSchedules.flatMap { ws ->
                 val wsId = ws[WorkSchedules.id]
@@ -415,4 +470,204 @@ object ScheduleService {
         createdAt = this[Users.createdAt].toString(),
         updatedAt = this[Users.updatedAt].toString()
     )
+    
+    // ── Cleanup Methods ──────────────────────────────
+    
+    /**
+     * Debug: Check current shifts and their validity
+     */
+    fun debugCheckShifts(): Map<String, Any> {
+        return transaction {
+            val results = mutableMapOf<String, Any>()
+            
+            // Get all shifts
+            val allShifts = Shifts.selectAll().map { row ->
+                val startTime = row[Shifts.startTime]
+                val endTime = row[Shifts.endTime]
+                val isValidMorning = startTime >= LocalTime.of(8, 0) && endTime <= LocalTime.of(12, 0)
+                val isValidAfternoon = startTime >= LocalTime.of(13, 30) && endTime <= LocalTime.of(17, 30)
+                val isValid = isValidMorning || isValidAfternoon
+                
+                mapOf(
+                    "id" to row[Shifts.id].toString(),
+                    "name" to row[Shifts.name],
+                    "startTime" to startTime.toString(),
+                    "endTime" to endTime.toString(),
+                    "isValid" to isValid,
+                    "validityStatus" to when {
+                        isValidMorning -> "Valid Morning"
+                        isValidAfternoon -> "Valid Afternoon"
+                        else -> "INVALID - Outside working hours"
+                    }
+                )
+            }
+            
+            results["allShifts"] = allShifts
+            
+            // Get invalid shifts
+            val invalidShifts = allShifts.filter { !(it["isValid"] as Boolean) }
+            results["invalidShifts"] = invalidShifts
+            results["invalidShiftCount"] = invalidShifts.size
+            
+            // Get work schedules using invalid shifts
+            if (invalidShifts.isNotEmpty()) {
+                val invalidShiftIds = invalidShifts.map { UUID.fromString(it["id"] as String) }
+                
+                val workSchedulesWithInvalidShifts = WorkSchedules
+                    .join(Shifts, JoinType.INNER) { WorkSchedules.shiftId eq Shifts.id }
+                    .select { WorkSchedules.shiftId inList invalidShiftIds }
+                    .map { row ->
+                        mapOf(
+                            "workScheduleId" to row[WorkSchedules.id].toString(),
+                            "date" to row[WorkSchedules.date].toString(),
+                            "shiftName" to row[Shifts.name],
+                            "startTime" to row[Shifts.startTime].toString(),
+                            "endTime" to row[Shifts.endTime].toString()
+                        )
+                    }
+                
+                results["workSchedulesWithInvalidShifts"] = workSchedulesWithInvalidShifts
+                results["workScheduleCount"] = workSchedulesWithInvalidShifts.size
+                
+                // Get time slots from invalid shifts
+                val timeSlotsWithInvalidShifts = TimeSlots
+                    .join(WorkSchedules, JoinType.INNER) { TimeSlots.workScheduleId eq WorkSchedules.id }
+                    .join(Shifts, JoinType.INNER) { WorkSchedules.shiftId eq Shifts.id }
+                    .select { WorkSchedules.shiftId inList invalidShiftIds }
+                    .map { row ->
+                        mapOf(
+                            "timeSlotId" to row[TimeSlots.id].toString(),
+                            "startTime" to row[TimeSlots.startTime].toString(),
+                            "endTime" to row[TimeSlots.endTime].toString(),
+                            "date" to row[WorkSchedules.date].toString(),
+                            "shiftName" to row[Shifts.name]
+                        )
+                    }
+                
+                results["timeSlotsWithInvalidShifts"] = timeSlotsWithInvalidShifts
+                results["timeSlotCount"] = timeSlotsWithInvalidShifts.size
+            }
+            
+            results
+        }
+    }
+    
+    /**
+     * Clean up invalid shifts (outside working hours) and related data
+     */
+    fun cleanupInvalidShifts(): Map<String, Any> {
+        return transaction {
+            val results = mutableMapOf<String, Any>()
+            
+            // 1. Find invalid shifts
+            val invalidShifts = Shifts.select {
+                not(
+                    ((Shifts.startTime greaterEq LocalTime.of(8, 0)) and (Shifts.endTime lessEq LocalTime.of(12, 0))) or
+                    ((Shifts.startTime greaterEq LocalTime.of(13, 30)) and (Shifts.endTime lessEq LocalTime.of(17, 30)))
+                )
+            }.map { 
+                mapOf(
+                    "id" to it[Shifts.id].toString(),
+                    "name" to it[Shifts.name],
+                    "startTime" to it[Shifts.startTime].toString(),
+                    "endTime" to it[Shifts.endTime].toString()
+                )
+            }
+            
+            results["invalidShiftsFound"] = invalidShifts
+            
+            if (invalidShifts.isEmpty()) {
+                results["message"] = "No invalid shifts found"
+                return@transaction results
+            }
+            
+            val invalidShiftIds = invalidShifts.map { UUID.fromString(it["id"] as String) }
+            
+            // 2. Cancel appointments using invalid time slots
+            val appointmentsToCancel = Appointments
+                .join(TimeSlots, JoinType.INNER) { Appointments.timeSlotId eq TimeSlots.id }
+                .join(WorkSchedules, JoinType.INNER) { TimeSlots.workScheduleId eq WorkSchedules.id }
+                .select {
+                    (WorkSchedules.shiftId inList invalidShiftIds) and
+                    (Appointments.status inList listOf("pending", "confirmed"))
+                }
+            
+            val cancelledAppointments = appointmentsToCancel.count()
+            
+            appointmentsToCancel.forEach { row ->
+                val appointmentId = row[Appointments.id]
+                Appointments.update({ Appointments.id eq appointmentId }) {
+                    it[status] = "cancelled"
+                    it[cancellationReason] = "System cleanup: Invalid time slot outside working hours"
+                    it[updatedAt] = Instant.now()
+                }
+            }
+            
+            results["cancelledAppointments"] = cancelledAppointments
+            
+            // 3. Delete time slots for invalid shifts
+            val timeSlotsToDelete = TimeSlots
+                .join(WorkSchedules, JoinType.INNER) { TimeSlots.workScheduleId eq WorkSchedules.id }
+                .select { WorkSchedules.shiftId inList invalidShiftIds }
+            
+            val deletedTimeSlots = timeSlotsToDelete.count()
+            
+            timeSlotsToDelete.forEach { row ->
+                val timeSlotId = row[TimeSlots.id]
+                TimeSlots.deleteWhere { TimeSlots.id eq timeSlotId }
+            }
+            
+            results["deletedTimeSlots"] = deletedTimeSlots
+            
+            // 4. Delete work schedules for invalid shifts
+            val deletedWorkSchedules = WorkSchedules.select { 
+                WorkSchedules.shiftId inList invalidShiftIds 
+            }.count()
+            
+            WorkSchedules.deleteWhere { shiftId inList invalidShiftIds }
+            
+            results["deletedWorkSchedules"] = deletedWorkSchedules
+            
+            // 5. Delete invalid shifts
+            val deletedShifts = Shifts.deleteWhere { id inList invalidShiftIds }
+            
+            results["deletedShifts"] = deletedShifts
+            
+            // 6. Ensure standard shifts exist
+            val morningShiftExists = Shifts.select {
+                (Shifts.name eq "Morning") and
+                (Shifts.startTime eq LocalTime.of(8, 0)) and
+                (Shifts.endTime eq LocalTime.of(12, 0))
+            }.count() > 0
+            
+            if (!morningShiftExists) {
+                Shifts.insert {
+                    it[name] = "Morning"
+                    it[startTime] = LocalTime.of(8, 0)
+                    it[endTime] = LocalTime.of(12, 0)
+                    it[createdAt] = Instant.now()
+                }
+                results["createdMorningShift"] = true
+            }
+            
+            val afternoonShiftExists = Shifts.select {
+                (Shifts.name eq "Afternoon") and
+                (Shifts.startTime eq LocalTime.of(13, 30)) and
+                (Shifts.endTime eq LocalTime.of(17, 30))
+            }.count() > 0
+            
+            if (!afternoonShiftExists) {
+                Shifts.insert {
+                    it[name] = "Afternoon"
+                    it[startTime] = LocalTime.of(13, 30)
+                    it[endTime] = LocalTime.of(17, 30)
+                    it[createdAt] = Instant.now()
+                }
+                results["createdAfternoonShift"] = true
+            }
+            
+            results["message"] = "Cleanup completed successfully"
+            results
+        }
+    }
 }

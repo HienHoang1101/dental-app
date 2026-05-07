@@ -8,6 +8,7 @@ interface DatePickerProps {
   onSelectDate: (date: string) => void;
   disabledDates?: string[];
   minDate?: string;
+  availableDaysOfWeek?: number[];
 }
 
 export default function DatePicker({
@@ -15,6 +16,7 @@ export default function DatePicker({
   onSelectDate,
   disabledDates = [],
   minDate,
+  availableDaysOfWeek,
 }: DatePickerProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -82,6 +84,12 @@ export default function DatePicker({
     if (date < today) return true;
     if (disabledDates.includes(dateStr)) return true;
     if (date.getDay() === 0) return true; // Disable Sundays
+
+    if (availableDaysOfWeek && availableDaysOfWeek.length > 0) {
+      if (!availableDaysOfWeek.includes(date.getDay())) return true;
+    } else if (availableDaysOfWeek && availableDaysOfWeek.length === 0) {
+      return true; // No available days
+    }
 
     return false;
   };

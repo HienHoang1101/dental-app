@@ -10,6 +10,7 @@ import com.nhom2.weekschedule.WeeklyScheduleService
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
@@ -85,7 +86,7 @@ object AppointmentService {
                 }
             }
             
-            val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("UTC"))
+            val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("Asia/Ho_Chi_Minh"))
             
             // Validate appointment date (not a holiday)
             val isHoliday = Holidays.select { Holidays.date eq appointmentDate }.count() > 0
@@ -103,6 +104,7 @@ object AppointmentService {
                 it[Appointments.startTime] = startTime
                 it[Appointments.endTime] = endTime
                 it[Appointments.parentAppointmentId] = request.parentAppointmentId?.let { UUID.fromString(it) }
+                it[Appointments.chatSessionId] = request.chatSessionId?.let { UUID.fromString(it) }
                 it[status] = "pending"
                 it[notes] = request.notes
                 it[createdAt] = Instant.now()
@@ -197,7 +199,7 @@ object AppointmentService {
                 return@transaction Result.failure(Exception("Time slot overlaps with an existing appointment"))
             }
             
-            val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("UTC"))
+            val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("Asia/Ho_Chi_Minh"))
             val healthRecordId = parent[Appointments.healthRecordId]
             
             // Auto-complete parent
@@ -279,6 +281,18 @@ object AppointmentService {
             
             val shiftStartTime = shift[Shifts.startTime]
             val shiftEndTime = shift[Shifts.endTime]
+            
+            // VALIDATE WORKING HOURS: Only allow morning (8:00-12:00) and afternoon (13:30-17:30)
+            val isValidMorningShift = shiftStartTime >= LocalTime.of(8, 0) && shiftEndTime <= LocalTime.of(12, 0)
+            val isValidAfternoonShift = shiftStartTime >= LocalTime.of(13, 30) && shiftEndTime <= LocalTime.of(17, 30)
+            
+            if (!isValidMorningShift && !isValidAfternoonShift) {
+                return@transaction Result.failure(Exception(
+                    "Invalid appointment time. Appointments are only available during working hours: " +
+                    "Morning (08:00-12:00) and Afternoon (13:30-17:30). " +
+                    "Requested time slot: $shiftStartTime-$shiftEndTime"
+                ))
+            }
             
             // Find doctor_schedule that matches doctor, date, and overlaps with shift time
             val doctorSchedule = DoctorSchedules.select {

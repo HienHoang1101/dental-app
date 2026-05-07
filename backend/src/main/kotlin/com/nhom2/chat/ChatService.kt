@@ -1,5 +1,6 @@
 package com.nhom2.chat
 
+import com.nhom2.Security
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -280,6 +281,95 @@ object ChatService {
             ChatMessages.deleteWhere { ChatMessages.sessionId eq sessionId }
             // Xóa session
             ChatSessions.deleteWhere { ChatSessions.id eq sessionId } > 0
+        }
+    }
+    
+    /**
+     * Lấy chat history của bệnh nhân theo appointment ID (cho bác sĩ)
+     */
+    fun getPatientChatHistoryByAppointment(appointmentId: UUID, doctorId: UUID): PatientChatHistoryResponse? {
+        return transaction {
+            // Join appointments với users và chat_sessions
+            val query = com.nhom2.models.Appointments
+                .join(com.nhom2.auth.UserTable, JoinType.INNER) { com.nhom2.models.Appointments.patientId eq com.nhom2.auth.UserTable.id }
+                .join(ChatSessions, JoinType.LEFT) { com.nhom2.models.Appointments.chatSessionId eq ChatSessions.id }
+                .select { 
+                    (com.nhom2.models.Appointments.id eq appointmentId) and 
+                    (com.nhom2.models.Appointments.doctorId eq doctorId)
+                }
+                .singleOrNull() ?: return@transaction null
+            
+            val patientId = query[com.nhom2.models.Appointments.patientId].toString()
+            val patientName = query[com.nhom2.auth.UserTable.fullName] ?: "Unknown"
+            val appointmentDate = query[com.nhom2.models.Appointments.appointmentDate].toString()
+            val appointmentStatus = query[com.nhom2.models.Appointments.status]
+            val chatSessionId = query[ChatSessions.id]
+            
+            // Lấy chat history nếu có
+            val chatHistory = chatSessionId?.let { sessionId ->
+                getSessionWithMessages(sessionId)
+            }
+            
+            PatientChatHistoryResponse(
+                patientId = patientId,
+                patientName = patientName,
+                appointmentId = appointmentId.toString(),
+                appointmentDate = appointmentDate,
+                appointmentStatus = appointmentStatus,
+                chatHistory = chatHistory
+            )
+        }
+    }
+    
+    /**
+     * Lấy danh sách tất cả bệnh nhân có chat history của một bác sĩ
+     */
+    fun getPatientChatHistoriesByDoctor(doctorId: UUID): List<PatientChatHistoryResponse> {
+        return transaction {
+            val query = com.nhom2.models.Appointments
+                .join(com.nhom2.auth.UserTable, JoinType.INNER) { com.nhom2.models.Appointments.patientId eq com.nhom2.auth.UserTable.id }
+                .join(ChatSessions, JoinType.LEFT) { com.nhom2.models.Appointments.chatSessionId eq ChatSessions.id }
+                .select { 
+                    (com.nhom2.models.Appointments.doctorId eq doctorId) and
+                    (com.nhom2.models.Appointments.status inList listOf("confirmed", "completed")) and
+                    (com.nhom2.models.Appointments.chatSessionId.isNotNull())
+                }
+                .orderBy(com.nhom2.models.Appointments.appointmentDate, SortOrder.DESC)
+            
+            query.map { row ->
+                val patientId = row[com.nhom2.models.Appointments.patientId].toString()
+                val patientName = row[com.nhom2.auth.UserTable.fullName] ?: "Unknown"
+                val appointmentId = row[com.nhom2.models.Appointments.id].toString()
+                val appointmentDate = row[com.nhom2.models.Appointments.appointmentDate].toString()
+                val appointmentStatus = row[com.nhom2.models.Appointments.status]
+                val chatSessionId = row[ChatSessions.id]
+                
+                // Lấy chat history summary (không lấy full messages để tối ưu performance)
+                val chatHistory = chatSessionId?.let { sessionId ->
+                    val sessionRow = ChatSessions.select { ChatSessions.id eq sessionId }.singleOrNull()
+                    sessionRow?.let {
+                        val session = ChatSessionResponse(
+                            id = it[ChatSessions.id].toString(),
+                            patientId = it[ChatSessions.patientId].toString(),
+                            startedAt = it[ChatSessions.startedAt].toString(),
+                            endedAt = it[ChatSessions.endedAt]?.toString(),
+                            summary = it[ChatSessions.summary],
+                            primaryLabel = it[ChatSessions.primaryLabel],
+                            primaryConfidence = it[ChatSessions.primaryConfidence]
+                        )
+                        ChatHistoryResponse(session, emptyList()) // Không load messages trong list view
+                    }
+                }
+                
+                PatientChatHistoryResponse(
+                    patientId = patientId,
+                    patientName = patientName,
+                    appointmentId = appointmentId,
+                    appointmentDate = appointmentDate,
+                    appointmentStatus = appointmentStatus,
+                    chatHistory = chatHistory
+                )
+            }
         }
     }
 }

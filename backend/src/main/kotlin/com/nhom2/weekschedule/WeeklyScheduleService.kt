@@ -130,7 +130,7 @@ object WeeklyScheduleService {
         return transaction {
             val slots = mutableListOf<AvailableSlotDTO>()
             val now = Instant.now()
-            val zoneId = ZoneId.of("UTC")
+            val zoneId = ZoneId.of("Asia/Ho_Chi_Minh")
             
             // Step 1: Get day of week (1=Monday, 7=Sunday)
             val dayOfWeek = date.dayOfWeek.value
@@ -245,7 +245,7 @@ object WeeklyScheduleService {
     fun getAdminSchedulesByDate(date: LocalDate): List<DoctorScheduleResponse> {
         return transaction {
             val now = Instant.now()
-            val zoneId = ZoneId.of("UTC")
+            val zoneId = ZoneId.of("Asia/Ho_Chi_Minh")
             val dayOfWeek = date.dayOfWeek.value
             
             // 1. Get all doctors
@@ -348,7 +348,7 @@ object WeeklyScheduleService {
      */
     fun validateSlot(doctorId: UUID, startTime: Instant, endTime: Instant): Result<Unit> {
         return transaction {
-            val date = LocalDate.ofInstant(startTime, ZoneId.of("UTC"))
+            val date = LocalDate.ofInstant(startTime, ZoneId.of("Asia/Ho_Chi_Minh"))
             val now = Instant.now()
             
             // Check lead time

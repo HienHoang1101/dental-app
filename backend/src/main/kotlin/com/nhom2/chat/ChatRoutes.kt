@@ -1,5 +1,6 @@
 package com.nhom2.chat
 
+import com.nhom2.Security
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -7,6 +8,9 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
 
 fun Route.chatRoutes() {
@@ -173,6 +177,123 @@ fun Route.chatRoutes() {
                     }
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
+                }
+            }
+        }
+        
+        // ── DOCTOR ENDPOINTS ────────────────────────────────────────
+        route("/doctor") {
+            authenticate("auth-jwt") {
+                
+                /**
+                 * GET /api/chat/doctor/patients
+                 * Lấy danh sách bệnh nhân có chat history của bác sĩ hiện tại
+                 */
+                get("/patients") {
+                    try {
+                        val principal = call.principal<JWTPrincipal>()
+                        val userId = principal?.payload?.getClaim("userId")?.asString()
+                            ?: return@get call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Unauthorized"))
+                        
+                        val role = principal.payload.getClaim("role")?.asString()
+                        if (role != "doctor") {
+                            return@get call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Access denied. Doctor role required"))
+                        }
+                        
+                        // Lấy doctor ID từ user ID
+                        val doctorId = Security.getDoctorIdByUserId(UUID.fromString(userId))
+                            ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Doctor profile not found"))
+                        
+                        val patientHistories = ChatService.getPatientChatHistoriesByDoctor(doctorId)
+                        
+                        call.respond(HttpStatusCode.OK, mapOf(
+                            "success" to true,
+                            "data" to patientHistories
+                        ))
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
+                    }
+                }
+                
+                /**
+                 * GET /api/chat/doctor/appointments/{appointmentId}/chat
+                 * Lấy chi tiết chat history của bệnh nhân theo appointment ID
+                 */
+                get("/appointments/{appointmentId}/chat") {
+                    try {
+                        val appointmentId = call.parameters["appointmentId"]?.let { UUID.fromString(it) }
+                            ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid appointment ID"))
+                        
+                        val principal = call.principal<JWTPrincipal>()
+                        val userId = principal?.payload?.getClaim("userId")?.asString()
+                            ?: return@get call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Unauthorized"))
+                        
+                        val role = principal.payload.getClaim("role")?.asString()
+                        if (role != "doctor") {
+                            return@get call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Access denied. Doctor role required"))
+                        }
+                        
+                        // Lấy doctor ID từ user ID
+                        val doctorId = Security.getDoctorIdByUserId(UUID.fromString(userId))
+                            ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Doctor profile not found"))
+                        
+                        val patientChatHistory = ChatService.getPatientChatHistoryByAppointment(appointmentId, doctorId)
+                            ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Appointment not found or no chat history available"))
+                        
+                        call.respond(HttpStatusCode.OK, mapOf(
+                            "success" to true,
+                            "data" to patientChatHistory
+                        ))
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
+                    }
+                }
+                
+                /**
+                 * GET /api/chat/doctor/sessions/{sessionId}
+                 * Lấy chi tiết session với full messages (cho bác sĩ có quyền truy cập)
+                 */
+                get("/sessions/{sessionId}") {
+                    try {
+                        val sessionId = call.parameters["sessionId"]?.let { UUID.fromString(it) }
+                            ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid session ID"))
+                        
+                        val principal = call.principal<JWTPrincipal>()
+                        val userId = principal?.payload?.getClaim("userId")?.asString()
+                            ?: return@get call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Unauthorized"))
+                        
+                        val role = principal.payload.getClaim("role")?.asString()
+                        if (role != "doctor") {
+                            return@get call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Access denied. Doctor role required"))
+                        }
+                        
+                        // Lấy doctor ID từ user ID
+                        val doctorId = Security.getDoctorIdByUserId(UUID.fromString(userId))
+                            ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Doctor profile not found"))
+                        
+                        // Kiểm tra xem bác sĩ có quyền truy cập session này không
+                        val hasAccess = transaction {
+                            com.nhom2.models.Appointments.select {
+                                (com.nhom2.models.Appointments.doctorId eq doctorId) and
+                                (com.nhom2.models.Appointments.chatSessionId eq sessionId) and
+                                (com.nhom2.models.Appointments.status inList listOf("confirmed", "completed"))
+                            }.count() > 0
+                        }
+                        
+                        if (!hasAccess) {
+                            return@get call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Access denied. No confirmed appointment with this chat session"))
+                        }
+                        
+                        val chatHistory = ChatService.getSessionWithMessages(sessionId)
+                            ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Session not found"))
+                        
+                        call.respond(HttpStatusCode.OK, mapOf(
+                            "success" to true,
+                            "data" to chatHistory
+                        ))
+                    } catch (e: Exception) {
+                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
+                    }
                 }
             }
         }

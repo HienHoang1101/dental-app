@@ -22,6 +22,7 @@ export default function SelectDateByDoctorPage() {
     end: string;
   } | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [weeklySchedules, setWeeklySchedules] = useState<Array<{ dayOfWeek: number; isActive: boolean }>>([]);
   const [availableSlots, setAvailableSlots] = useState<
     Array<{ start: string; end: string }>
   >([]);
@@ -44,13 +45,15 @@ export default function SelectDateByDoctorPage() {
 
   const loadData = async () => {
     try {
-      const [doctorData, holidaysData] = await Promise.all([
+      const [doctorData, holidaysData, schedulesData] = await Promise.all([
         patientApi.getDoctorById(doctorId!),
         patientApi.getHolidays(),
+        patientApi.getWeeklySchedulesV2(doctorId!),
       ]);
 
       setDoctor(doctorData);
       setHolidays(holidaysData);
+      setWeeklySchedules(schedulesData);
     } catch (error) {
       console.error("Failed to load data:", error);
     } finally {
@@ -119,6 +122,13 @@ export default function SelectDateByDoctorPage() {
 
   // Get dates when doctor is not available
   const disabledDates = holidays.map((h) => h.date);
+
+  // Calculate available days of week (0=Sunday, 1=Monday... from JS Date)
+  // Backend returns dayOfWeek: 1=Monday..7=Sunday
+  const activeSchedules = weeklySchedules.filter(s => s.isActive);
+  const availableDaysOfWeek = Array.from(
+    new Set(activeSchedules.map(s => s.dayOfWeek === 7 ? 0 : s.dayOfWeek))
+  );
 
   const today = getTodayString();
 
@@ -208,6 +218,7 @@ export default function SelectDateByDoctorPage() {
               onSelectDate={handleDateSelect}
               disabledDates={disabledDates}
               minDate={today}
+              availableDaysOfWeek={availableDaysOfWeek}
             />
           </div>
 

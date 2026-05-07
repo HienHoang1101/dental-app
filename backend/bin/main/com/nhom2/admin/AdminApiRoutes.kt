@@ -544,63 +544,53 @@ fun Route.adminApiRoutes() {
                     val date = call.request.queryParameters["date"]
                     println("=== DEBUG: Getting doctor schedules for date: $date ===")
                     
-                    val schedules = transaction {
-                        try {
-                            // First, check if we have any schedules at all
-                            val totalCount = DoctorSchedules.selectAll().count()
-                            println("Total schedules in database: $totalCount")
-                            
-                            val baseQuery = if (date != null) {
-                                val parsedDate = java.time.LocalDate.parse(date)
-                                println("Parsed date: $parsedDate")
-                                DoctorSchedules.select { DoctorSchedules.workDate eq parsedDate }
-                            } else {
-                                DoctorSchedules.selectAll()
-                            }
-                            
-                            val scheduleCount = baseQuery.count()
-                            println("Schedules found for query: $scheduleCount")
-                            
-                            baseQuery.map { scheduleRow ->
-                                val doctorId = scheduleRow[DoctorSchedules.doctorId]
-                                println("Processing schedule for doctor ID: $doctorId")
-                                
-                                // Query doctor info separately to avoid join issues
-                                val doctor = try {
-                                    SupabaseDoctors.select { SupabaseDoctors.id eq doctorId }.singleOrNull()
-                                } catch (e: Exception) {
-                                    println("Error fetching doctor $doctorId: ${e.message}")
-                                    null
-                                }
-                                
-                                val doctorName = doctor?.get(SupabaseDoctors.fullName) ?: "Unknown"
-                                val specialty = doctor?.get(SupabaseDoctors.specialty) ?: "Unknown"
-                                println("Doctor: $doctorName, Specialty: $specialty")
-                                
-                                DoctorScheduleResponse(
-                                    id = scheduleRow[DoctorSchedules.id].toString(),
-                                    doctorId = doctorId.toString(),
-                                    doctorName = doctorName,
-                                    specialty = specialty,
-                                    workDate = scheduleRow[DoctorSchedules.workDate].toString(),
-                                    slotStart = scheduleRow[DoctorSchedules.slotStart].toString(),
-                                    slotEnd = scheduleRow[DoctorSchedules.slotEnd].toString(),
-                                    isBooked = scheduleRow[DoctorSchedules.isBooked],
-                                    createdAt = scheduleRow[DoctorSchedules.createdAt].toString()
-                                )
-                            }
-                        } catch (e: Exception) {
-                            println("Error in transaction: ${e.message}")
-                            e.printStackTrace()
-                            throw e
-                        }
+                    if (date == null) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse(error = "MISSING_DATE", message = "Date parameter is required"))
+                        return@get
                     }
+
+                    val parsedDate = java.time.LocalDate.parse(date)
+                    val schedules = com.nhom2.weekschedule.WeeklyScheduleService.getAdminSchedulesByDate(parsedDate)
                     
-                    println("Returning ${schedules.size} schedules")
+                    println("Returning ${schedules.size} schedules for $date")
                     call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = schedules))
                 } catch (e: Exception) {
                     println("=== ERROR in doctor-schedules endpoint ===")
                     e.printStackTrace()
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
+                    )
+                }
+            }
+
+            // Get dates with schedules in a month (for calendar dots)
+            get("/doctor-schedules/month") {
+                try {
+                    val year = call.request.queryParameters["year"]?.toInt() ?: java.time.LocalDate.now().year
+                    val month = call.request.queryParameters["month"]?.toInt() ?: java.time.LocalDate.now().monthValue
+                    
+                    val firstDay = java.time.LocalDate.of(year, month, 1)
+                    val lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth())
+                    
+                    val dates = transaction {
+                        val activeDaysOfWeek = WeeklyWorkSchedules.select { WeeklyWorkSchedules.isActive eq true }
+                            .map { it[WeeklyWorkSchedules.dayOfWeek] }
+                            .distinct()
+                        
+                        val result = mutableListOf<String>()
+                        var current = firstDay
+                        while (!current.isAfter(lastDay)) {
+                            if (current.dayOfWeek.value in activeDaysOfWeek) {
+                                result.add(current.toString())
+                            }
+                            current = current.plusDays(1)
+                        }
+                        result
+                    }
+                    
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = dates))
+                } catch (e: Exception) {
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
@@ -646,6 +636,19 @@ fun Route.adminApiRoutes() {
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         ErrorResponse(error = "CREATE_FAILED", message = "Create failed: ${e.message}")
+                    )
+                }
+            }
+            // Utility: Fix appointments schema
+            post("/fix-schema") {
+                try {
+                    val result = com.nhom2.utils.SimpleMigration.fixAppointmentsSchema()
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = result))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "FIX_FAILED", message = "Fix failed: ${e.message}")
                     )
                 }
             }

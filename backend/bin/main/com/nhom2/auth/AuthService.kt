@@ -188,14 +188,30 @@ object AuthService {
         }
     }
 
-    private fun ResultRow.toUserDTO() = UserDTO(
-        id = this[Users.id].toString(),
-        email = this[Users.email],
-        fullName = this[Users.fullName],
-        phone = this[Users.phone],
-        role = this[Users.role],
-        isActive = this[Users.isActive],
-        createdAt = this[Users.createdAt].toString(),
-        updatedAt = this[Users.updatedAt].toString()
-    )
+    private fun ResultRow.toUserDTO(): UserDTO {
+        val userIdStr = this[Users.id].toString()
+        val role = this[Users.role]
+        var doctorId: String? = null
+        
+        if (role == "doctor") {
+            try {
+                val doctor = com.nhom2.doctors.SupabaseDoctorService.getDoctorByUserId(this[Users.id])
+                doctorId = doctor?.id
+            } catch (e: Exception) {
+                // Ignore if doctor profile not found yet
+            }
+        }
+        
+        return UserDTO(
+            id = userIdStr,
+            email = this[Users.email],
+            fullName = this[Users.fullName],
+            phone = this[Users.phone],
+            role = role,
+            isActive = this[Users.isActive],
+            createdAt = this[Users.createdAt].toString(),
+            updatedAt = this[Users.updatedAt].toString(),
+            doctorId = doctorId
+        )
+    }
 }

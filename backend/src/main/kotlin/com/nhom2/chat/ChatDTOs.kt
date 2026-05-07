@@ -71,6 +71,16 @@ data class ChatHistoryResponse(
     val messages: List<ChatMessageResponse>
 )
 
+@Serializable
+data class PatientChatHistoryResponse(
+    val patientId: String,
+    val patientName: String,
+    val appointmentId: String,
+    val appointmentDate: String,
+    val appointmentStatus: String,
+    val chatHistory: ChatHistoryResponse?
+)
+
 // ── ML Service DTOs (for calling Python ML Service) ────────
 
 @Serializable

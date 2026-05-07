@@ -154,6 +154,7 @@ object Appointments : Table("appointments") {
     val startTime       = timestamp("start_time").nullable() // UTC timestamp for new booking system
     val endTime         = timestamp("end_time").nullable() // UTC timestamp for new booking system
     val parentAppointmentId = uuid("parent_appointment_id").references(Appointments.id).nullable() // For follow-ups
+    val chatSessionId   = uuid("chat_session_id").references(com.nhom2.chat.ChatSessions.id).nullable() // Link to chat session
     val createdAt       = timestamp("created_at").clientDefault { Instant.now() }
     val updatedAt       = timestamp("updated_at").clientDefault { Instant.now() }
 

@@ -292,6 +292,71 @@ fun Route.scheduleRoutes() {
                 }
             }
 
+            // Admin: Cleanup invalid shifts (outside working hours)
+            post("/cleanup-invalid-shifts") {
+                try {
+                    val principal = call.principal<JWTPrincipal>()
+                    val role = principal!!.payload.getClaim("role").asString()
+                    
+                    if (role != "admin") {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(error = "FORBIDDEN", message = "Access denied"))
+                        return@post
+                    }
+
+                    val result = ScheduleService.cleanupInvalidShifts()
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = result))
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "CLEANUP_FAILED", message = e.message ?: "Failed to cleanup invalid shifts")
+                    )
+                }
+            }
+
+            // Debug: Check current shifts (temporary endpoint)
+            get("/debug/shifts") {
+                try {
+                    val result = ScheduleService.debugCheckShifts()
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = result))
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "DEBUG_FAILED", message = e.message ?: "Failed to check shifts")
+                    )
+                }
+            }
+
+            // Emergency cleanup endpoint (no auth for testing)
+            post("/emergency-cleanup") {
+                try {
+                    val result = ScheduleService.cleanupInvalidShifts()
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = result))
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "CLEANUP_FAILED", message = e.message ?: "Failed to cleanup invalid shifts")
+                    )
+                }
+            }
+
+            // Test available slots endpoint (no auth)
+            get("/test-available-slots") {
+                try {
+                    val doctorId = call.request.queryParameters["doctorId"]?.let { UUID.fromString(it) }
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "doctorId required"))
+                    val date = call.request.queryParameters["date"]?.let { LocalDate.parse(it) }
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "date required"))
+                    
+                    val slots = ScheduleService.getAvailableTimeSlots(doctorId, date)
+                    call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = slots))
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "TEST_FAILED", message = e.message ?: "Failed to get available slots")
+                    )
+                }
+            }
+
             // Doctor: Create leave request
             post("/leave-requests") {
                 try {

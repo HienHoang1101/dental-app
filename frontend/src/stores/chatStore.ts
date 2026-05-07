@@ -23,6 +23,7 @@ interface ChatState {
   closeChat: () => void;
   sendMessage: (content: string) => Promise<void>;
   loadHistory: (sessionId: string) => Promise<void>;
+  startNewSession: () => Promise<void>;
   clearError: () => void;
   reset: () => void;
 }
@@ -39,15 +40,53 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // Open chat widget
   openChat: async () => {
+    const { currentSession, isOpen } = get();
+    if (isOpen) return;
+
     set({ isOpen: true, isLoading: true, error: null });
 
     try {
-      // Create new session
+      if (currentSession) {
+        set({ isLoading: false });
+        return;
+      }
+
+      // Try to load latest session
+      const sessions = await chatApi.getChatSessions();
+      if (sessions.length > 0) {
+        const latestSession = sessions[0];
+        
+        // If the latest session is already "finished" (has summary/ended), 
+        // maybe we should start a new one? 
+        // For now, let's always load the latest to satisfy the user's request to "read old history"
+        const history = await chatApi.getChatHistory(latestSession.id);
+        set({
+          currentSession: history.session,
+          messages: history.messages,
+          isLoading: false,
+        });
+      } else {
+        // Create new session if none exists
+        const session = await chatApi.createChatSession();
+        set({ currentSession: session, messages: [], isLoading: false });
+      }
+    } catch (error: any) {
+      set({
+        error: error.response?.data?.error || "Failed to open chat",
+        isLoading: false,
+      });
+    }
+  },
+
+  // Start a completely new session
+  startNewSession: async () => {
+    set({ isLoading: true, error: null, messages: [], suggestions: null });
+    try {
       const session = await chatApi.createChatSession();
       set({ currentSession: session, messages: [], isLoading: false });
     } catch (error: any) {
       set({
-        error: error.response?.data?.error || "Failed to create chat session",
+        error: error.response?.data?.error || "Failed to create new chat session",
         isLoading: false,
       });
     }

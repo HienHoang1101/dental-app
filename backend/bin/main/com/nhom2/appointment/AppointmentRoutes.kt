@@ -276,57 +276,6 @@ fun Route.appointmentRoutes() {
             }
             
             /**
-             * POST /api/appointments/follow-up
-             * Create follow-up appointment (doctor only)
-             */
-            post("/follow-up") {
-            try {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = UUID.fromString(principal!!.payload.getClaim("userId").asString())
-                val role = principal.payload.getClaim("role").asString()
-                
-                if (role != "doctor") {
-                    return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse(
-                        error = "FORBIDDEN",
-                        message = "Only doctors can create follow-up appointments"
-                    ))
-                }
-
-                // Get doctor ID from user ID
-                val doctor = com.nhom2.doctors.SupabaseDoctorService.getDoctorByUserId(userId)
-                    ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(
-                        error = "NOT_FOUND",
-                        message = "Doctor profile not found"
-                    ))
-
-                val request = call.receive<CreateFollowUpRequest>()
-                call.application.environment.log.info("Creating follow-up appointment for doctor ${doctor.id}: $request")
-                
-                val result = AppointmentService.createFollowUp(UUID.fromString(doctor.id), request)
-                
-                result.onSuccess { appointment ->
-                    call.respond(HttpStatusCode.Created, ApiResponse(
-                        success = true,
-                        data = appointment,
-                        message = "Follow-up appointment created successfully"
-                    ))
-                }.onFailure { error ->
-                    call.application.environment.log.error("Failed to create follow-up appointment", error)
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(
-                        error = "CREATE_FAILED",
-                        message = error.message ?: "Failed to create follow-up appointment"
-                    ))
-                }
-            } catch (e: Exception) {
-                call.application.environment.log.error("Error creating follow-up appointment", e)
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse(
-                    error = "SERVER_ERROR",
-                    message = e.message ?: "An error occurred"
-                ))
-            }
-            }
-            
-            /**
              * GET /api/appointments/{id}/v2
              * Get appointment details using V2 format
              */

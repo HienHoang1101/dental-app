@@ -10,6 +10,7 @@ import com.nhom2.weekschedule.WeeklyScheduleService
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
@@ -71,8 +72,8 @@ object AppointmentService {
                     .singleOrNull()
                     ?: return@transaction Result.failure(Exception("Parent appointment not found"))
                 
-                if (parent[Appointments.status] != "completed") {
-                    return@transaction Result.failure(Exception("Parent appointment must be completed"))
+                if (parent[Appointments.status] !in listOf("confirmed", "completed")) {
+                    return@transaction Result.failure(Exception("Parent appointment must be confirmed or completed"))
                 }
                 
                 // Check if follow-up is within 30 days
@@ -103,6 +104,7 @@ object AppointmentService {
                 it[Appointments.startTime] = startTime
                 it[Appointments.endTime] = endTime
                 it[Appointments.parentAppointmentId] = request.parentAppointmentId?.let { UUID.fromString(it) }
+                it[Appointments.chatSessionId] = request.chatSessionId?.let { UUID.fromString(it) }
                 it[status] = "pending"
                 it[notes] = request.notes
                 it[createdAt] = Instant.now()
@@ -143,9 +145,10 @@ object AppointmentService {
                 return@transaction Result.failure(Exception("You can only create follow-ups for your own appointments"))
             }
             
-            // Verify parent is completed
-            if (parent[Appointments.status] != "completed") {
-                return@transaction Result.failure(Exception("Parent appointment must be completed"))
+            // Verify parent is confirmed
+            val currentStatus = parent[Appointments.status]
+            if (currentStatus != "confirmed") {
+                return@transaction Result.failure(Exception("Parent appointment must be confirmed to create a follow-up"))
             }
             
             val patientId = parent[Appointments.patientId]
@@ -172,6 +175,15 @@ object AppointmentService {
             if (daysDiff > 30) {
                 return@transaction Result.failure(Exception("Follow-up must be within 30 days of original appointment"))
             }
+
+            // Check if start time is in the future relative to parent end time
+            if (startTime.isBefore(parentEndTime)) {
+                return@transaction Result.failure(Exception("Follow-up must be scheduled after the current appointment"))
+            }
+
+            if (endTime.isBefore(startTime) || endTime == startTime) {
+                return@transaction Result.failure(Exception("End time must be after start time"))
+            }
             
             // Check for overlapping appointments
             val hasOverlap = Appointments.select {
@@ -189,6 +201,13 @@ object AppointmentService {
             
             val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("UTC"))
             val healthRecordId = parent[Appointments.healthRecordId]
+            
+            // Auto-complete parent
+            Appointments.update({ Appointments.id eq parentId }) {
+                it[status] = "completed"
+                it[notes] = (parent[Appointments.notes] ?: "") + "\n[Tái khám đã được hẹn vào $appointmentDate]"
+                it[updatedAt] = Instant.now()
+            }
             
             // Create follow-up appointment
             val id = Appointments.insert {
@@ -262,6 +281,18 @@ object AppointmentService {
             
             val shiftStartTime = shift[Shifts.startTime]
             val shiftEndTime = shift[Shifts.endTime]
+            
+            // VALIDATE WORKING HOURS: Only allow morning (8:00-12:00) and afternoon (13:30-17:30)
+            val isValidMorningShift = shiftStartTime >= LocalTime.of(8, 0) && shiftEndTime <= LocalTime.of(12, 0)
+            val isValidAfternoonShift = shiftStartTime >= LocalTime.of(13, 30) && shiftEndTime <= LocalTime.of(17, 30)
+            
+            if (!isValidMorningShift && !isValidAfternoonShift) {
+                return@transaction Result.failure(Exception(
+                    "Invalid appointment time. Appointments are only available during working hours: " +
+                    "Morning (08:00-12:00) and Afternoon (13:30-17:30). " +
+                    "Requested time slot: $shiftStartTime-$shiftEndTime"
+                ))
+            }
             
             // Find doctor_schedule that matches doctor, date, and overlaps with shift time
             val doctorSchedule = DoctorSchedules.select {
