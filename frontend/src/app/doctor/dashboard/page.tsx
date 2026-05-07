@@ -16,6 +16,10 @@ export default function DoctorDashboard() {
     confirmed: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [completingId, setCompletingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -54,25 +58,38 @@ export default function DoctorDashboard() {
   };
 
   const handleConfirm = async (id: string) => {
-    if (!confirm("Xác nhận lịch hẹn này?")) return;
-
     try {
       await doctorApi.confirmAppointment(id);
       loadData();
+      setConfirmingId(null);
     } catch (error) {
+      console.error("Confirm appointment error:", error);
       alert("Không thể xác nhận lịch hẹn");
     }
   };
 
   const handleCancel = async (id: string) => {
-    const reason = prompt("Lý do hủy:");
-    if (!reason) return;
+    if (!cancelReason.trim()) return;
 
     try {
-      await doctorApi.cancelAppointment(id, reason);
+      await doctorApi.cancelAppointment(id, cancelReason);
       loadData();
+      setCancelingId(null);
+      setCancelReason("");
     } catch (error) {
+      console.error("Cancel appointment error:", error);
       alert("Không thể hủy lịch hẹn");
+    }
+  };
+
+  const handleComplete = async (id: string) => {
+    try {
+      await doctorApi.completeAppointment(id);
+      loadData();
+      setCompletingId(null);
+    } catch (error) {
+      console.error("Complete appointment error:", error);
+      alert("Không thể hoàn thành lịch hẹn");
     }
   };
 
@@ -221,18 +238,29 @@ export default function DoctorDashboard() {
                       {appointment.status === "pending" && (
                         <div className="flex space-x-2 ml-4">
                           <button
-                            onClick={() => handleConfirm(appointment.id)}
+                            onClick={() => setConfirmingId(appointment.id)}
                             className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
                             title="Xác nhận"
                           >
                             <CheckCircle className="w-5 h-5" />
                           </button>
                           <button
-                            onClick={() => handleCancel(appointment.id)}
+                            onClick={() => setCancelingId(appointment.id)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
                             title="Hủy"
                           >
                             <XCircle className="w-5 h-5" />
+                          </button>
+                        </div>
+                      )}
+                      {appointment.status === "confirmed" && (
+                        <div className="flex space-x-2 ml-4">
+                          <button
+                            onClick={() => setCompletingId(appointment.id)}
+                            className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                            title="Hoàn thành"
+                          >
+                            Hoàn thành
                           </button>
                         </div>
                       )}
@@ -244,6 +272,93 @@ export default function DoctorDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Confirm Modal */}
+      {confirmingId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h3 className="text-lg font-bold mb-4">Xác nhận lịch hẹn</h3>
+            <p className="mb-6">Bạn có chắc chắn muốn xác nhận lịch hẹn này?</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setConfirmingId(null)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={() => handleConfirm(confirmingId)}
+                className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg"
+              >
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Modal */}
+      {cancelingId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h3 className="text-lg font-bold mb-4">Hủy lịch hẹn</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Lý do hủy
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-red-500 focus:border-red-500"
+                rows={3}
+                placeholder="Nhập lý do hủy..."
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setCancelingId(null);
+                  setCancelReason("");
+                }}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={() => handleCancel(cancelingId)}
+                disabled={!cancelReason.trim()}
+                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg disabled:opacity-50"
+              >
+                Xác nhận hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Modal */}
+      {completingId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h3 className="text-lg font-bold mb-4">Hoàn thành lịch hẹn</h3>
+            <p className="mb-6">Bạn có chắc chắn muốn đánh dấu lịch hẹn này đã hoàn thành?</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setCompletingId(null)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={() => handleComplete(completingId)}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg"
+              >
+                Hoàn thành
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DoctorLayout>
   );
 }

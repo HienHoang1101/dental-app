@@ -12,6 +12,12 @@ import com.nhom2.schedule.scheduleRoutes
 import com.nhom2.notification.notificationRoutes
 import com.nhom2.dashboard.dashboardRoutes
 import com.nhom2.patient.patientRoutes
+import com.nhom2.chat.chatRoutes
+// Phase 1: New schedule system routes
+import com.nhom2.weekschedule.weeklyScheduleRoutes
+import com.nhom2.schedulechange.scheduleChangeRoutes
+import com.nhom2.exception.scheduleExceptionRoutes
+import com.nhom2.config.DatabaseConfig
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -40,6 +46,12 @@ fun Application.configureRouting() {
             scheduleRoutes()
             notificationRoutes()
             dashboardRoutes()
+            chatRoutes()  // Chat routes
+            
+            // Phase 1: New schedule system routes
+            weeklyScheduleRoutes()
+            scheduleChangeRoutes()
+            scheduleExceptionRoutes()
         }
     }
 }

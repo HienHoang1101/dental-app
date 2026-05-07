@@ -3,76 +3,74 @@
 import { useEffect, useState } from "react";
 import DoctorLayout from "@/components/layout/DoctorLayout";
 import { doctorApi } from "@/lib/doctorApi";
-import { Calendar, Clock, Plus, CheckCircle, XCircle } from "lucide-react";
+import {
+  Calendar,
+  Clock,
+  Plus,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Save,
+} from "lucide-react";
 
-interface WorkSchedule {
+interface WeeklySchedule {
   id: string;
   doctorId: string;
-  workDate: string;
-  slotStart: string;
-  slotEnd: string;
-  isBooked: boolean;
+  dayOfWeek: number; // 1=Mon, 7=Sun
+  session: "morning" | "afternoon";
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+}
+
+interface ScheduleChangeRequest {
+  id: string;
+  requestType: "add" | "remove" | "modify";
+  status: "pending" | "approved" | "rejected";
+  oldScheduleData?: any;
+  newScheduleData?: any;
+  rejectionReason?: string;
   createdAt: string;
 }
 
-interface Shift {
-  id: string;
-  name: string;
-  startTime: string;
-  endTime: string;
+interface SelectedSlot {
+  dayOfWeek: number;
+  session: "morning" | "afternoon";
 }
 
 export default function DoctorSchedulePage() {
-  const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [weeklySchedules, setWeeklySchedules] = useState<WeeklySchedule[]>([]);
+  const [changeRequests, setChangeRequests] = useState<ScheduleChangeRequest[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date().toISOString().split("T")[0],
-    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0],
-  });
-  const [newSchedule, setNewSchedule] = useState({
-    date: "",
-    shiftId: "",
-  });
+  const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  const days = [
+    { value: 1, label: "Thứ 2" },
+    { value: 2, label: "Thứ 3" },
+    { value: 3, label: "Thứ 4" },
+    { value: 4, label: "Thứ 5" },
+    { value: 5, label: "Thứ 6" },
+    { value: 6, label: "Thứ 7" },
+    { value: 7, label: "Chủ nhật" },
+  ];
+
+  const sessions = [
+    { value: "morning" as const, label: "Sáng", time: "08:00 - 12:00" },
+    { value: "afternoon" as const, label: "Chiều", time: "13:30 - 17:30" },
+  ];
 
   useEffect(() => {
     loadSchedules();
-    loadShifts();
-  }, [dateRange]);
-
-  const loadShifts = async () => {
-    try {
-      const response = await fetch(
-        "http://localhost:8080/api/schedules/shifts",
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        },
-      );
-      const data = await response.json();
-      if (data.success && data.data) {
-        setShifts(data.data);
-        // Set first shift as default
-        if (data.data.length > 0) {
-          setNewSchedule((prev) => ({ ...prev, shiftId: data.data[0].id }));
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load shifts:", error);
-    }
-  };
+    loadChangeRequests();
+  }, []);
 
   const loadSchedules = async () => {
     try {
-      const data = await doctorApi.getMyWorkSchedules(
-        dateRange.startDate,
-        dateRange.endDate,
-      );
-      setSchedules(data);
+      const data = await doctorApi.getMyWeeklySchedules();
+      setWeeklySchedules(data as any);
     } catch (error) {
       console.error("Failed to load schedules:", error);
     } finally {
@@ -80,86 +78,198 @@ export default function DoctorSchedulePage() {
     }
   };
 
-  const handleRegisterSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const loadChangeRequests = async () => {
     try {
-      await doctorApi.registerWorkSchedule({
-        shiftId: newSchedule.shiftId,
-        date: newSchedule.date,
-      });
-      setShowModal(false);
-      setNewSchedule({
-        date: "",
-        shiftId: shifts.length > 0 ? shifts[0].id : "",
-      });
-      loadSchedules();
+      const data = await doctorApi.getMyScheduleChangeRequests();
+      setChangeRequests(data);
     } catch (error) {
-      alert("Không thể đăng ký lịch làm việc");
+      console.error("Failed to load change requests:", error);
     }
   };
 
-  // Group schedules by date
-  const schedulesByDate = schedules.reduce(
-    (acc, schedule) => {
-      const date = schedule.workDate;
-      if (!acc[date]) {
-        acc[date] = [];
-      }
-      acc[date].push(schedule);
-      return acc;
-    },
-    {} as Record<string, WorkSchedule[]>,
-  );
+  const hasSchedule = (
+    dayOfWeek: number,
+    session: "morning" | "afternoon",
+  ): boolean => {
+    return weeklySchedules.some(
+      (s) => s.dayOfWeek === dayOfWeek && s.session === session && s.isActive,
+    );
+  };
 
-  const sortedDates = Object.keys(schedulesByDate).sort();
+  const hasPendingRequest = (
+    dayOfWeek: number,
+    session: "morning" | "afternoon",
+  ): boolean => {
+    return changeRequests.some(
+      (r) =>
+        r.status === "pending" &&
+        ((r.newScheduleData?.dayOfWeek === dayOfWeek &&
+          r.newScheduleData?.session === session) ||
+          (r.oldScheduleData?.dayOfWeek === dayOfWeek &&
+            r.oldScheduleData?.session === session)),
+    );
+  };
+
+  const isSelected = (
+    dayOfWeek: number,
+    session: "morning" | "afternoon",
+  ): boolean => {
+    return selectedSlots.some(
+      (s) => s.dayOfWeek === dayOfWeek && s.session === session,
+    );
+  };
+
+  const handleToggleSlot = (
+    dayOfWeek: number,
+    session: "morning" | "afternoon",
+  ) => {
+    // Don't allow selecting if already has schedule or pending request
+    if (
+      hasSchedule(dayOfWeek, session) ||
+      hasPendingRequest(dayOfWeek, session)
+    ) {
+      return;
+    }
+
+    setSelectedSlots((prev) => {
+      const exists = prev.some(
+        (s) => s.dayOfWeek === dayOfWeek && s.session === session,
+      );
+      if (exists) {
+        return prev.filter(
+          (s) => !(s.dayOfWeek === dayOfWeek && s.session === session),
+        );
+      } else {
+        return [...prev, { dayOfWeek, session }];
+      }
+    });
+  };
+
+  const handleSubmitRequests = async () => {
+    if (selectedSlots.length === 0) {
+      alert("Vui lòng chọn ít nhất 1 buổi làm việc");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // Create multiple requests
+      const promises = selectedSlots.map((slot) =>
+        doctorApi.requestScheduleChange({
+          requestType: "add",
+          newScheduleData: {
+            dayOfWeek: slot.dayOfWeek,
+            session: slot.session,
+            startTime: slot.session === "morning" ? "08:00" : "13:30",
+            endTime: slot.session === "morning" ? "12:00" : "17:30",
+          },
+        }),
+      );
+
+      await Promise.all(promises);
+
+      alert(
+        `Đã gửi ${selectedSlots.length} yêu cầu đăng ký lịch thành công! Chờ admin duyệt.`,
+      );
+      setSelectedSlots([]);
+      loadChangeRequests();
+    } catch (error) {
+      console.error("Failed to submit requests:", error);
+      alert("Không thể gửi yêu cầu. Vui lòng thử lại.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedSlots([]);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "pending":
+        return (
+          <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+            Chờ duyệt
+          </span>
+        );
+      case "approved":
+        return (
+          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+            Đã duyệt
+          </span>
+        );
+      case "rejected":
+        return (
+          <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
+            Từ chối
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <DoctorLayout>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">Lịch làm việc</h1>
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Đăng ký ca làm
-          </button>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Đăng ký lịch làm việc cố định
+            </h1>
+            <p className="text-gray-600 text-sm mt-1">
+              Lịch đăng ký tại đây sẽ được áp dụng cho <strong>tất cả các tuần</strong> sau khi được Admin duyệt.
+            </p>
+          </div>
+          {selectedSlots.length > 0 && (
+            <div className="flex gap-2">
+              <button
+                onClick={handleClearSelection}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Hủy chọn
+              </button>
+              <button
+                onClick={handleSubmitRequests}
+                disabled={submitting}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                <Save className="w-5 h-5" />
+                {submitting
+                  ? "Đang gửi..."
+                  : `Gửi ${selectedSlots.length} yêu cầu`}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Date Range Filter */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Từ ngày
-              </label>
-              <input
-                type="date"
-                value={dateRange.startDate}
-                onChange={(e) =>
-                  setDateRange({ ...dateRange, startDate: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Đến ngày
-              </label>
-              <input
-                type="date"
-                value={dateRange.endDate}
-                onChange={(e) =>
-                  setDateRange({ ...dateRange, endDate: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              />
+        {/* Selection Info */}
+        {selectedSlots.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+              <div className="text-sm text-blue-800">
+                <p className="font-semibold mb-1">
+                  Đã chọn {selectedSlots.length} buổi làm việc:
+                </p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedSlots.map((slot, index) => (
+                    <span
+                      key={index}
+                      className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium"
+                    >
+                      {days.find((d) => d.value === slot.dayOfWeek)?.label} -{" "}
+                      {slot.session === "morning" ? "Sáng" : "Chiều"}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Schedule List */}
+        {/* Weekly Schedule Grid */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-6">
             {loading ? (
@@ -167,163 +277,191 @@ export default function DoctorSchedulePage() {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-2 text-gray-600">Đang tải...</p>
               </div>
-            ) : sortedDates.length === 0 ? (
-              <div className="text-center py-8">
-                <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600">Chưa có lịch làm việc nào</p>
-              </div>
             ) : (
-              <div className="space-y-6">
-                {sortedDates.map((date) => (
-                  <div
-                    key={date}
-                    className="border-b last:border-b-0 pb-6 last:pb-0"
-                  >
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                      {new Date(date).toLocaleDateString("vi-VN", {
-                        weekday: "long",
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {schedulesByDate[date].map((schedule) => (
-                        <div
-                          key={schedule.id}
-                          className={`border rounded-lg p-4 ${
-                            schedule.isBooked
-                              ? "bg-red-50 border-red-200"
-                              : "bg-green-50 border-green-200"
-                          }`}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-3 font-semibold text-gray-700">
+                        Buổi
+                      </th>
+                      {days.map((day) => (
+                        <th
+                          key={day.value}
+                          className="text-center p-3 font-semibold text-gray-700"
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center space-x-2">
-                              <Clock className="w-4 h-4 text-gray-600" />
-                              <span className="font-medium">
-                                {schedule.slotStart} - {schedule.slotEnd}
-                              </span>
-                            </div>
-                            {schedule.isBooked ? (
-                              <XCircle className="w-5 h-5 text-red-600" />
-                            ) : (
-                              <CheckCircle className="w-5 h-5 text-green-600" />
-                            )}
-                          </div>
-                          <div className="text-sm">
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                schedule.isBooked
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-green-100 text-green-800"
-                              }`}
-                            >
-                              {schedule.isBooked ? "Đã đặt" : "Còn trống"}
-                            </span>
-                          </div>
-                        </div>
+                          {day.label}
+                        </th>
                       ))}
-                    </div>
-                  </div>
-                ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions.map((session) => (
+                      <tr key={session.value} className="border-b">
+                        <td className="p-3">
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {session.label}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {session.time}
+                            </div>
+                          </div>
+                        </td>
+                        {days.map((day) => {
+                          const scheduled = hasSchedule(
+                            day.value,
+                            session.value,
+                          );
+                          const pending = hasPendingRequest(
+                            day.value,
+                            session.value,
+                          );
+                          const selected = isSelected(day.value, session.value);
+
+                          return (
+                            <td key={day.value} className="p-3 text-center">
+                              <div
+                                onClick={() =>
+                                  !scheduled && !pending && handleToggleSlot(day.value, session.value)
+                                }
+                                className={`w-full h-20 rounded-xl border-2 transition-all flex flex-col items-center justify-center relative overflow-hidden ${
+                                  scheduled
+                                    ? "bg-green-600 border-green-600 text-white shadow-sm cursor-default"
+                                    : pending
+                                      ? "bg-amber-50 border-amber-200 text-amber-700 cursor-not-allowed"
+                                      : selected
+                                        ? "bg-blue-600 border-blue-600 text-white shadow-md scale-105 z-10"
+                                        : "bg-gray-50 border-gray-200 text-gray-400 hover:bg-white hover:border-blue-400 hover:text-blue-500 cursor-pointer group"
+                                }`}
+                              >
+                                {scheduled ? (
+                                  <>
+                                    <CheckCircle className="w-6 h-6 mb-1" />
+                                    <span className="text-[10px] font-bold uppercase tracking-wider">Đã duyệt</span>
+                                  </>
+                                ) : pending ? (
+                                  <>
+                                    <Clock className="w-5 h-5 mb-1 animate-pulse" />
+                                    <span className="text-[10px] font-medium">Chờ duyệt</span>
+                                  </>
+                                ) : selected ? (
+                                  <>
+                                    <Plus className="w-6 h-6 mb-1" />
+                                    <span className="text-[10px] font-bold uppercase tracking-wider">Đã chọn</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                                    <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">Đăng ký</span>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
         </div>
 
-        {/* Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-              <span className="text-sm text-green-800">
-                Slot trống:{" "}
-                <span className="font-semibold">
-                  {schedules.filter((s) => !s.isBooked).length}
-                </span>
-              </span>
+        {/* Legend */}
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-blue-600" />
+            Chú thích & Hướng dẫn
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="flex flex-col items-center gap-2 p-3 rounded-lg bg-gray-50 border border-gray-100">
+              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white">
+                <CheckCircle className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-medium text-gray-700 text-center">Đã đăng ký & duyệt</span>
             </div>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <XCircle className="w-5 h-5 text-red-600 mr-2" />
-              <span className="text-sm text-red-800">
-                Đã đặt:{" "}
-                <span className="font-semibold">
-                  {schedules.filter((s) => s.isBooked).length}
-                </span>
-              </span>
+            <div className="flex flex-col items-center gap-2 p-3 rounded-lg bg-gray-50 border border-gray-100">
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                <Plus className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-medium text-gray-700 text-center">Đang chọn (chưa gửi)</span>
+            </div>
+            <div className="flex flex-col items-center gap-2 p-3 rounded-lg bg-gray-50 border border-gray-100">
+              <div className="w-8 h-8 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-center text-amber-600">
+                <Clock className="w-5 h-5 animate-pulse" />
+              </div>
+              <span className="text-xs font-medium text-gray-700 text-center">Đang chờ Admin duyệt</span>
+            </div>
+            <div className="flex flex-col items-center gap-2 p-3 rounded-lg bg-gray-50 border border-gray-100">
+              <div className="w-8 h-8 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center text-gray-400">
+                <Plus className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-medium text-gray-700 text-center">Trống (Click để chọn)</span>
+            </div>
+            <div className="flex flex-col items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100 col-span-2 md:col-span-1">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xs">
+                Tip
+              </div>
+              <span className="text-xs font-medium text-blue-800 text-center">Chọn nhiều ô rồi nhấn "Gửi yêu cầu"</span>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Register Schedule Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Đăng ký ca làm việc</h2>
-            <form onSubmit={handleRegisterSchedule} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Ngày làm việc
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={newSchedule.date}
-                  onChange={(e) =>
-                    setNewSchedule({ ...newSchedule, date: e.target.value })
-                  }
-                  min={new Date().toISOString().split("T")[0]}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                />
+        {/* Change Requests History */}
+        {changeRequests.length > 0 && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6">
+              <h2 className="text-lg font-semibold mb-4">
+                Lịch sử yêu cầu thay đổi
+              </h2>
+              <div className="space-y-3">
+                {changeRequests.slice(0, 10).map((request) => (
+                  <div key={request.id} className="border rounded-lg p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          {getStatusBadge(request.status)}
+                          <span className="text-sm text-gray-600">
+                            {request.requestType === "add" && "Thêm lịch"}
+                            {request.requestType === "remove" && "Xóa lịch"}
+                            {request.requestType === "modify" && "Sửa lịch"}
+                          </span>
+                        </div>
+                        {request.newScheduleData && (
+                          <p className="text-sm text-gray-700">
+                            {
+                              days.find(
+                                (d) =>
+                                  d.value === request.newScheduleData.dayOfWeek,
+                              )?.label
+                            }{" "}
+                            -{" "}
+                            {request.newScheduleData.session === "morning"
+                              ? "Sáng"
+                              : "Chiều"}
+                          </p>
+                        )}
+                        {request.rejectionReason && (
+                          <p className="text-sm text-red-600 mt-1">
+                            Lý do từ chối: {request.rejectionReason}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {new Date(request.createdAt).toLocaleDateString(
+                          "vi-VN",
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Ca làm việc
-                </label>
-                <select
-                  required
-                  value={newSchedule.shiftId}
-                  onChange={(e) =>
-                    setNewSchedule({ ...newSchedule, shiftId: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                >
-                  <option value="">-- Chọn ca làm việc --</option>
-                  {shifts.map((shift) => (
-                    <option key={shift.id} value={shift.id}>
-                      {shift.name} ({shift.startTime.substring(0, 5)} -{" "}
-                      {shift.endTime.substring(0, 5)})
-                    </option>
-                  ))}
-                </select>
-                {shifts.length === 0 && (
-                  <p className="mt-1 text-xs text-red-500">
-                    Không có ca làm việc nào. Vui lòng liên hệ admin.
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Đăng ký
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </DoctorLayout>
   );
 }

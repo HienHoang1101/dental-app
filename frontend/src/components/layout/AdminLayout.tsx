@@ -12,6 +12,7 @@ import {
   Settings,
   Bell,
   ClipboardList,
+  Clock,
 } from "lucide-react";
 import Header from "./Header";
 
@@ -31,6 +32,7 @@ export default function AdminLayout({
     { name: "Dịch vụ", href: "/admin/services", icon: Briefcase },
     { name: "Chuyên khoa", href: "/admin/specialties", icon: Stethoscope },
     { name: "Lịch làm việc", href: "/admin/schedules", icon: Calendar },
+    { name: "Duyệt lịch", href: "/admin/schedule-changes", icon: Clock },
     { name: "Người dùng", href: "/admin/users", icon: Settings },
     { name: "Thông báo", href: "/admin/notifications", icon: Bell },
   ];

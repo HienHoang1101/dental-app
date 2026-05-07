@@ -118,6 +118,19 @@ export const patientApi = {
     return response.data.data || [];
   },
 
+  // V2: New weekly schedule system
+  getAvailableSlotsV2: async (params: {
+    doctorId: string;
+    date: string;
+  }): Promise<Array<{ start: string; end: string }>> => {
+    const response = await api.get<
+      ApiResponse<{ slots: Array<{ start: string; end: string }> }>
+    >(`/doctors/${params.doctorId}/available-slots`, {
+      params: { date: params.date },
+    });
+    return response.data.data?.slots || [];
+  },
+
   // Holidays
   getHolidays: async (): Promise<Holiday[]> => {
     const response = await api.get<ApiResponse<Holiday[]>>(
@@ -132,6 +145,22 @@ export const patientApi = {
   ): Promise<Appointment> => {
     const response = await api.post<ApiResponse<Appointment>>(
       "/appointments",
+      data,
+    );
+    return response.data.data!;
+  },
+
+  // V2: New time-based appointment booking
+  createAppointmentV2: async (data: {
+    doctorId: string;
+    startTime: string; // ISO 8601 timestamp
+    endTime: string; // ISO 8601 timestamp
+    serviceId?: string;
+    notes?: string;
+    parentAppointmentId?: string; // For follow-ups
+  }): Promise<Appointment> => {
+    const response = await api.post<ApiResponse<Appointment>>(
+      "/appointments/v2",
       data,
     );
     return response.data.data!;

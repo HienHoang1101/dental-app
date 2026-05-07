@@ -88,7 +88,7 @@ object DashboardService {
 
         val patient = Users.select { Users.id eq patientId }.single()
         val doctor = SupabaseDoctors.select { SupabaseDoctors.id eq doctorId }.single()
-        val timeSlot = TimeSlots.select { TimeSlots.id eq timeSlotId }.single()
+        val timeSlot = timeSlotId?.let { TimeSlots.select { TimeSlots.id eq it }.singleOrNull() }
         val service = serviceId?.let { Services.select { Services.id eq it }.singleOrNull() }
 
         return AppointmentSummaryDTO(
@@ -97,8 +97,8 @@ object DashboardService {
             doctorName = doctor[SupabaseDoctors.fullName],
             specialtyName = doctor[SupabaseDoctors.specialty],
             appointmentDate = this[Appointments.appointmentDate].toString(),
-            startTime = timeSlot[TimeSlots.startTime].toString(),
-            endTime = timeSlot[TimeSlots.endTime].toString(),
+            startTime = timeSlot?.get(TimeSlots.startTime)?.toString() ?: this[Appointments.startTime]?.toString() ?: "",
+            endTime = timeSlot?.get(TimeSlots.endTime)?.toString() ?: this[Appointments.endTime]?.toString() ?: "",
             status = this[Appointments.status],
             serviceName = service?.get(Services.name)
         )

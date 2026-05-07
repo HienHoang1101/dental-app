@@ -17,8 +17,8 @@ export default function SelectDoctorBySpecialtyPage() {
 
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [timeSlots, setTimeSlots] = useState<Array<{ start: string; end: string }>>([]);
+  const [selectedSlot, setSelectedSlot] = useState<{ start: string; end: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
@@ -32,7 +32,9 @@ export default function SelectDoctorBySpecialtyPage() {
 
   const loadDoctors = async () => {
     try {
-      const data = await patientApi.getDoctors({ specialtyId });
+      const data = await patientApi.getDoctors({
+        specialtyId: specialtyId || undefined,
+      });
       setDoctors(data.filter((d) => d.isActive));
     } catch (error) {
       console.error("Failed to load doctors:", error);
@@ -47,7 +49,7 @@ export default function SelectDoctorBySpecialtyPage() {
     setLoadingSlots(true);
 
     try {
-      const slots = await patientApi.getAvailableTimeSlots({
+      const slots = await patientApi.getAvailableSlotsV2({
         doctorId,
         date: date!,
       });
@@ -63,7 +65,7 @@ export default function SelectDoctorBySpecialtyPage() {
   const handleContinue = () => {
     if (selectedDoctor && selectedSlot) {
       router.push(
-        `/patient/appointments/book/confirm?doctorId=${selectedDoctor}&serviceId=${serviceId}&timeSlotId=${selectedSlot}&date=${date}`,
+        `/patient/appointments/book/confirm?doctorId=${selectedDoctor}&serviceId=${serviceId}&startTime=${encodeURIComponent(selectedSlot.start)}&endTime=${encodeURIComponent(selectedSlot.end)}&date=${date}`,
       );
     }
   };
@@ -168,32 +170,34 @@ export default function SelectDoctorBySpecialtyPage() {
             ) : (
               <div className="bg-white rounded-lg shadow-md p-6">
                 <div className="grid grid-cols-2 gap-3">
-                  {timeSlots.map((slot) => (
-                    <button
-                      key={slot.id}
-                      onClick={() => setSelectedSlot(slot.id)}
-                      disabled={!slot.isAvailable}
-                      className={`p-3 rounded-lg border-2 transition-all text-center ${
-                        selectedSlot === slot.id
-                          ? "border-blue-600 bg-blue-50"
-                          : slot.isAvailable
-                            ? "border-gray-200 hover:border-blue-400 hover:bg-blue-50"
-                            : "border-gray-200 bg-gray-50 cursor-not-allowed opacity-50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-center gap-2 mb-1">
-                        <Clock className="h-4 w-4" />
-                        <span className="font-medium">
-                          {slot.startTime.substring(0, 5)}
-                        </span>
-                      </div>
-                      <span className="text-xs text-gray-600">
-                        {slot.isAvailable
-                          ? `${slot.remainingCapacity} chỗ`
-                          : "Đã đầy"}
-                      </span>
-                    </button>
-                  ))}
+                  {timeSlots.map((slot, index) => {
+                    const start = new Date(slot.start);
+                    const timeStr = start.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: false,
+                    });
+                    const isSelected =
+                      selectedSlot?.start === slot.start &&
+                      selectedSlot?.end === slot.end;
+
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => setSelectedSlot(slot)}
+                        className={`p-3 rounded-lg border-2 transition-all text-center ${
+                          isSelected
+                            ? "border-blue-600 bg-blue-50"
+                            : "border-gray-200 hover:border-blue-400 hover:bg-blue-50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          <span className="font-medium">{timeStr}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import PatientLayout from "@/components/layout/PatientLayout";
 import DatePicker from "@/components/appointments/DatePicker";
 import { patientApi } from "@/lib/patientApi";
-import { Doctor, Holiday, WorkSchedule } from "@/types";
-import { ArrowLeft, User } from "lucide-react";
+import { Doctor, Holiday } from "@/types";
+import { ArrowLeft, User, Clock, Calendar as CalendarIcon } from "lucide-react";
 import { getTodayString, formatDateToString } from "@/lib/dateUtils";
 
 export default function SelectDateByDoctorPage() {
@@ -17,9 +17,16 @@ export default function SelectDateByDoctorPage() {
 
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{
+    start: string;
+    end: string;
+  } | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [workSchedules, setWorkSchedules] = useState<WorkSchedule[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<
+    Array<{ start: string; end: string }>
+  >([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   useEffect(() => {
     if (!doctorId || !serviceId) {
@@ -29,29 +36,42 @@ export default function SelectDateByDoctorPage() {
     loadData();
   }, [doctorId, serviceId]);
 
+  useEffect(() => {
+    if (selectedDate && doctorId) {
+      loadAvailableSlots();
+    }
+  }, [selectedDate, doctorId]);
+
   const loadData = async () => {
     try {
-      const today = new Date();
-      const endDate = new Date();
-      endDate.setMonth(endDate.getMonth() + 3);
-
-      const [doctorData, holidaysData, schedulesData] = await Promise.all([
+      const [doctorData, holidaysData] = await Promise.all([
         patientApi.getDoctorById(doctorId!),
         patientApi.getHolidays(),
-        patientApi.getWorkSchedules({
-          doctorId: doctorId!,
-          startDate: formatDateToString(today),
-          endDate: formatDateToString(endDate),
-        }),
       ]);
 
       setDoctor(doctorData);
       setHolidays(holidaysData);
-      setWorkSchedules(schedulesData);
     } catch (error) {
       console.error("Failed to load data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAvailableSlots = async () => {
+    setLoadingSlots(true);
+    setSelectedSlot(null);
+    try {
+      const slots = await patientApi.getAvailableSlotsV2({
+        doctorId: doctorId!,
+        date: selectedDate!,
+      });
+      setAvailableSlots(slots);
+    } catch (error) {
+      console.error("Failed to load available slots:", error);
+      setAvailableSlots([]);
+    } finally {
+      setLoadingSlots(false);
     }
   };
 
@@ -60,18 +80,45 @@ export default function SelectDateByDoctorPage() {
   };
 
   const handleContinue = () => {
-    if (selectedDate && doctorId && serviceId) {
-      router.push(
-        `/patient/appointments/book/by-doctor/select-time?doctorId=${doctorId}&serviceId=${serviceId}&date=${selectedDate}`,
-      );
+    if (selectedSlot && doctorId && serviceId && selectedDate) {
+      // Pass startTime and endTime to confirm page
+      const params = new URLSearchParams({
+        doctorId: doctorId,
+        serviceId: serviceId,
+        startTime: selectedSlot.start,
+        endTime: selectedSlot.end,
+        date: selectedDate,
+      });
+      router.push(`/patient/appointments/book/confirm?${params.toString()}`);
     }
   };
 
+  const formatTimeSlot = (slot: { start: string; end: string }): string => {
+    const start = new Date(slot.start);
+    const end = new Date(slot.end);
+    return `${start.getHours().toString().padStart(2, "0")}:${start.getMinutes().toString().padStart(2, "0")} - ${end.getHours().toString().padStart(2, "0")}:${end.getMinutes().toString().padStart(2, "0")}`;
+  };
+
+  const groupSlotsBySession = (
+    slots: Array<{ start: string; end: string }>,
+  ) => {
+    const morning: Array<{ start: string; end: string }> = [];
+    const afternoon: Array<{ start: string; end: string }> = [];
+
+    slots.forEach((slot) => {
+      const hour = new Date(slot.start).getHours();
+      if (hour < 12) {
+        morning.push(slot);
+      } else {
+        afternoon.push(slot);
+      }
+    });
+
+    return { morning, afternoon };
+  };
+
   // Get dates when doctor is not available
-  const disabledDates = [
-    ...holidays.map((h) => h.date),
-    // Add dates without work schedules
-  ];
+  const disabledDates = holidays.map((h) => h.date);
 
   const today = getTodayString();
 
@@ -107,6 +154,8 @@ export default function SelectDateByDoctorPage() {
     );
   }
 
+  const { morning, afternoon } = groupSlotsBySession(availableSlots);
+
   return (
     <PatientLayout>
       <div className="max-w-4xl mx-auto">
@@ -141,20 +190,115 @@ export default function SelectDateByDoctorPage() {
         </div>
 
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Chọn ngày khám
+          Chọn ngày và giờ khám
         </h1>
         <p className="text-gray-600 mb-8">
-          Chọn ngày phù hợp với lịch làm việc của bác sĩ
+          Chọn ngày phù hợp, sau đó chọn khung giờ khả dụng
         </p>
 
-        <DatePicker
-          selectedDate={selectedDate}
-          onSelectDate={handleDateSelect}
-          disabledDates={disabledDates}
-          minDate={today}
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Date Picker */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarIcon className="h-5 w-5 text-blue-600" />
+              <h3 className="text-lg font-semibold">Chọn ngày</h3>
+            </div>
+            <DatePicker
+              selectedDate={selectedDate}
+              onSelectDate={handleDateSelect}
+              disabledDates={disabledDates}
+              minDate={today}
+            />
+          </div>
 
-        {selectedDate && (
+          {/* Time Slots */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="h-5 w-5 text-blue-600" />
+              <h3 className="text-lg font-semibold">Chọn giờ</h3>
+            </div>
+
+            {!selectedDate ? (
+              <div className="text-center py-12 text-gray-500">
+                <Clock className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <p>Vui lòng chọn ngày trước</p>
+              </div>
+            ) : loadingSlots ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-gray-600">Đang tải khung giờ...</p>
+              </div>
+            ) : availableSlots.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <Clock className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <p>Không có khung giờ khả dụng</p>
+                <p className="text-sm mt-1">Vui lòng chọn ngày khác</p>
+              </div>
+            ) : (
+              <div className="space-y-6 max-h-[500px] overflow-y-auto">
+                {/* Morning Slots */}
+                {morning.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">
+                      Buổi sáng
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {morning.map((slot, index) => (
+                        <button
+                          key={index}
+                          onClick={() => setSelectedSlot(slot)}
+                          className={`p-3 rounded-lg border-2 transition-all text-center ${
+                            selectedSlot?.start === slot.start
+                              ? "border-blue-600 bg-blue-50"
+                              : "border-gray-200 hover:border-blue-400 hover:bg-blue-50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span className="font-medium text-sm">
+                              {formatTimeSlot(slot)}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Afternoon Slots */}
+                {afternoon.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">
+                      Buổi chiều
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {afternoon.map((slot, index) => (
+                        <button
+                          key={index}
+                          onClick={() => setSelectedSlot(slot)}
+                          className={`p-3 rounded-lg border-2 transition-all text-center ${
+                            selectedSlot?.start === slot.start
+                              ? "border-blue-600 bg-blue-50"
+                              : "border-gray-200 hover:border-blue-400 hover:bg-blue-50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span className="font-medium text-sm">
+                              {formatTimeSlot(slot)}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {selectedDate && selectedSlot && (
           <div className="mt-6 flex justify-end">
             <button
               onClick={handleContinue}

@@ -144,12 +144,16 @@ object Appointments : Table("appointments") {
     val doctorId        = uuid("doctor_id").references(SupabaseDoctors.id)
     val healthRecordId  = uuid("health_record_id").references(HealthRecords.id)
     val scheduleId      = uuid("schedule_id").references(DoctorSchedules.id).nullable() // Nullable for backward compatibility
-    val timeSlotId      = uuid("time_slot_id").references(TimeSlots.id)
+    val timeSlotId      = uuid("time_slot_id").references(TimeSlots.id).nullable() // Made nullable for new booking system
     val serviceId       = uuid("service_id").references(Services.id).nullable()
     val appointmentDate = date("appointment_date")
     val status          = text("status").default("pending") // pending, confirmed, completed, cancelled
     val notes           = text("notes").nullable()
     val cancellationReason = text("cancellation_reason").nullable()
+    // Phase 1: New columns for time-based booking
+    val startTime       = timestamp("start_time").nullable() // UTC timestamp for new booking system
+    val endTime         = timestamp("end_time").nullable() // UTC timestamp for new booking system
+    val parentAppointmentId = uuid("parent_appointment_id").references(Appointments.id).nullable() // For follow-ups
     val createdAt       = timestamp("created_at").clientDefault { Instant.now() }
     val updatedAt       = timestamp("updated_at").clientDefault { Instant.now() }
 

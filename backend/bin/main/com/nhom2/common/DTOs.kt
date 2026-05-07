@@ -544,3 +544,150 @@ data class PatientProfileDTO(
     val medicalHistory: String?,
     val updatedAt: String
 )
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Phase 1: New DTOs for Refactored Schedule System
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Weekly Work Schedule DTOs ────────────────────────────────────────────────
+@Serializable
+data class WeeklyScheduleDTO(
+    val id: String,
+    val doctorId: String,
+    val dayOfWeek: Int, // 1=Mon, 7=Sun
+    val session: String, // 'morning' or 'afternoon'
+    val startTime: String, // HH:mm format
+    val endTime: String, // HH:mm format
+    val isActive: Boolean,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class CreateWeeklyScheduleRequest(
+    val dayOfWeek: Int,
+    val session: String,
+    val startTime: String? = null, // Optional, defaults based on session
+    val endTime: String? = null // Optional, defaults based on session
+)
+
+@Serializable
+data class UpdateWeeklyScheduleRequest(
+    val isActive: Boolean? = null,
+    val startTime: String? = null,
+    val endTime: String? = null
+)
+
+// ── Schedule Exception DTOs ──────────────────────────────────────────────────
+@Serializable
+data class ScheduleExceptionDTO(
+    val id: String,
+    val doctorId: String,
+    val exceptionDate: String, // YYYY-MM-DD
+    val exceptionType: String, // 'off' or 'override'
+    val session: String?, // null = entire day
+    val overrideStartTime: String?, // HH:mm format
+    val overrideEndTime: String?, // HH:mm format
+    val reason: String?,
+    val createdAt: String
+)
+
+@Serializable
+data class CreateExceptionRequest(
+    val exceptionDate: String,
+    val exceptionType: String,
+    val session: String? = null,
+    val overrideStartTime: String? = null,
+    val overrideEndTime: String? = null,
+    val reason: String? = null
+)
+
+// ── Schedule Change Request DTOs ─────────────────────────────────────────────
+@Serializable
+data class ScheduleChangeRequestDTO(
+    val id: String,
+    val doctorId: String,
+    val doctorName: String,
+    val requestType: String, // 'add', 'remove', 'modify'
+    val oldScheduleData: ScheduleDataDTO?,
+    val newScheduleData: ScheduleDataDTO?,
+    val status: String, // 'pending', 'approved', 'rejected'
+    val rejectionReason: String?,
+    val reviewedBy: String?,
+    val reviewedByName: String?,
+    val reviewedAt: String?,
+    val createdAt: String
+)
+
+@Serializable
+data class ScheduleDataDTO(
+    val dayOfWeek: Int,
+    val session: String,
+    val startTime: String,
+    val endTime: String
+)
+
+@Serializable
+data class CreateScheduleChangeRequest(
+    val requestType: String,
+    val oldScheduleData: ScheduleDataDTO? = null,
+    val newScheduleData: ScheduleDataDTO? = null
+)
+
+@Serializable
+data class ReviewScheduleChangeRequest(
+    val status: String, // 'approved' or 'rejected'
+    val rejectionReason: String? = null
+)
+
+// ── Available Slot DTOs ──────────────────────────────────────────────────────
+@Serializable
+data class AvailableSlotDTO(
+    val start: String, // ISO 8601 timestamp
+    val end: String // ISO 8601 timestamp
+)
+
+@Serializable
+data class AvailableSlotsResponse(
+    val date: String,
+    val doctorId: String,
+    val slots: List<AvailableSlotDTO>
+)
+
+// ── Appointment V2 DTOs (Time-based booking) ─────────────────────────────────
+@Serializable
+data class CreateAppointmentRequestV2(
+    val doctorId: String,
+    val startTime: String, // ISO 8601 timestamp
+    val endTime: String, // ISO 8601 timestamp
+    val serviceId: String,
+    val notes: String? = null,
+    val parentAppointmentId: String? = null // For follow-ups
+)
+
+@Serializable
+data class AppointmentDTOV2(
+    val id: String,
+    val patient: UserDTO,
+    val doctor: DoctorSummaryDTO,
+    val healthRecord: HealthRecordDTO,
+    val service: ServiceDTO?,
+    val startTime: String?, // ISO 8601 timestamp
+    val endTime: String?, // ISO 8601 timestamp
+    val appointmentDate: String, // YYYY-MM-DD (for backward compatibility)
+    val status: String,
+    val notes: String?,
+    val cancellationReason: String?,
+    val parentAppointmentId: String?,
+    val isFollowUp: Boolean,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class CreateFollowUpRequest(
+    val parentAppointmentId: String,
+    val startTime: String, // ISO 8601 timestamp
+    val endTime: String, // ISO 8601 timestamp
+    val notes: String? = null
+)

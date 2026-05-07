@@ -238,9 +238,9 @@ export default function AppointmentDetailPage() {
 
           <div className="flex items-start gap-4">
             <div className="flex-shrink-0">
-              {appointment.doctor.avatarUrl ? (
+              {appointment.doctor.avatar ? (
                 <img
-                  src={appointment.doctor.avatarUrl}
+                  src={appointment.doctor.avatar}
                   alt={appointment.doctor.fullName}
                   className="w-20 h-20 rounded-full object-cover"
                 />

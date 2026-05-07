@@ -21,9 +21,23 @@ export default function SchedulesPage() {
   const [doctorSchedules, setDoctorSchedules] = useState<DoctorSchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [scheduleDates, setScheduleDates] = useState<Set<string>>(new Set());
+  const [showExceptionModal, setShowExceptionModal] = useState(false);
+  const [exceptionForm, setExceptionForm] = useState({
+    doctorId: "",
+    exceptionDate: "",
+    exceptionType: "off" as "off" | "override",
+    session: "" as "" | "morning" | "afternoon",
+    overrideStartTime: "",
+    overrideEndTime: "",
+    reason: "",
+  });
+  const [doctors, setDoctors] = useState<
+    Array<{ id: string; fullName: string }>
+  >([]);
 
   useEffect(() => {
     loadMonthSchedules();
+    loadDoctors();
   }, [currentDate]);
 
   useEffect(() => {
@@ -34,45 +48,74 @@ export default function SchedulesPage() {
 
   const loadMonthSchedules = async () => {
     try {
-      // TEMPORARY: Disable month loading to reduce API calls
-      // This was causing too many requests and potential 500 errors
-      // TODO: Create a dedicated endpoint GET /api/admin/doctor-schedules/month?year=2026&month=5
-
-      console.log("Month schedule loading is temporarily disabled");
-      setScheduleDates(new Set());
-
-      /* Original code - commented out temporarily
       const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-      const firstDay = new Date(year, month, 1);
-      const lastDay = new Date(year, month + 1, 0);
-
-      const dates = new Set<string>();
-      const promises = [];
-
-      for (
-        let d = new Date(firstDay);
-        d <= lastDay;
-        d.setDate(d.getDate() + 1)
-      ) {
-        const dateStr = formatDate(d);
-        promises.push(
-          adminApi
-            .getDoctorSchedules(dateStr)
-            .then((schedules) => {
-              if (schedules.length > 0) {
-                dates.add(dateStr);
-              }
-            })
-            .catch(() => {}),
-        );
-      }
-
-      await Promise.all(promises);
-      setScheduleDates(dates);
-      */
+      const month = currentDate.getMonth() + 1; // JS month is 0-indexed
+      
+      const dates = await adminApi.getMonthSchedules(year, month);
+      setScheduleDates(new Set(dates));
     } catch (error) {
       console.error("Failed to load month schedules:", error);
+    }
+  };
+
+  const loadDoctors = async () => {
+    try {
+      const data = await adminApi.getDoctors();
+      setDoctors(data);
+    } catch (error) {
+      console.error("Failed to load doctors:", error);
+    }
+  };
+
+  const handleCreateException = async () => {
+    if (
+      !exceptionForm.doctorId ||
+      !exceptionForm.exceptionDate ||
+      !exceptionForm.exceptionType
+    ) {
+      alert("Vui lòng điền đầy đủ thông tin bắt buộc");
+      return;
+    }
+
+    if (
+      exceptionForm.exceptionType === "override" &&
+      (!exceptionForm.overrideStartTime || !exceptionForm.overrideEndTime)
+    ) {
+      alert("Vui lòng nhập giờ ghi đè");
+      return;
+    }
+
+    try {
+      await adminApi.createScheduleException({
+        doctorId: exceptionForm.doctorId,
+        exceptionDate: exceptionForm.exceptionDate,
+        exceptionType: exceptionForm.exceptionType,
+        session: exceptionForm.session || undefined,
+        overrideStartTime:
+          exceptionForm.exceptionType === "override"
+            ? exceptionForm.overrideStartTime
+            : undefined,
+        overrideEndTime:
+          exceptionForm.exceptionType === "override"
+            ? exceptionForm.overrideEndTime
+            : undefined,
+        reason: exceptionForm.reason || undefined,
+      });
+
+      alert("Tạo ngoại lệ lịch thành công!");
+      setShowExceptionModal(false);
+      setExceptionForm({
+        doctorId: "",
+        exceptionDate: "",
+        exceptionType: "off",
+        session: "",
+        overrideStartTime: "",
+        overrideEndTime: "",
+        reason: "",
+      });
+    } catch (error: any) {
+      console.error("Failed to create exception:", error);
+      alert(error.response?.data?.message || "Không thể tạo ngoại lệ");
     }
   };
 
@@ -204,9 +247,17 @@ export default function SchedulesPage() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Quản lý lịch làm việc
-        </h1>
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">
+            Quản lý lịch làm việc
+          </h1>
+          <button
+            onClick={() => setShowExceptionModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            + Thêm ngoại lệ
+          </button>
+        </div>
 
         {/* Calendar */}
         <div className="bg-white rounded-lg shadow p-6 max-w-3xl mx-auto">
@@ -379,6 +430,186 @@ export default function SchedulesPage() {
           </div>
         )}
       </div>
+
+      {/* Exception Modal */}
+      {showExceptionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold mb-4">
+              Thêm ngoại lệ lịch làm việc
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bác sĩ <span className="text-red-600">*</span>
+                </label>
+                <select
+                  value={exceptionForm.doctorId}
+                  onChange={(e) =>
+                    setExceptionForm({
+                      ...exceptionForm,
+                      doctorId: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Chọn bác sĩ --</option>
+                  {doctors.map((doctor) => (
+                    <option key={doctor.id} value={doctor.id}>
+                      {doctor.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ngày <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={exceptionForm.exceptionDate}
+                  onChange={(e) =>
+                    setExceptionForm({
+                      ...exceptionForm,
+                      exceptionDate: e.target.value,
+                    })
+                  }
+                  min={new Date().toISOString().split("T")[0]}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Loại ngoại lệ <span className="text-red-600">*</span>
+                </label>
+                <select
+                  value={exceptionForm.exceptionType}
+                  onChange={(e) =>
+                    setExceptionForm({
+                      ...exceptionForm,
+                      exceptionType: e.target.value as "off" | "override",
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="off">Nghỉ</option>
+                  <option value="override">Ghi đè giờ làm</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Buổi (để trống = cả ngày)
+                </label>
+                <select
+                  value={exceptionForm.session}
+                  onChange={(e) =>
+                    setExceptionForm({
+                      ...exceptionForm,
+                      session: e.target.value as "" | "morning" | "afternoon",
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Cả ngày</option>
+                  <option value="morning">Sáng</option>
+                  <option value="afternoon">Chiều</option>
+                </select>
+              </div>
+
+              {exceptionForm.exceptionType === "override" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Giờ bắt đầu <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={exceptionForm.overrideStartTime}
+                      onChange={(e) =>
+                        setExceptionForm({
+                          ...exceptionForm,
+                          overrideStartTime: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Giờ kết thúc <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={exceptionForm.overrideEndTime}
+                      onChange={(e) =>
+                        setExceptionForm({
+                          ...exceptionForm,
+                          overrideEndTime: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Lý do
+                </label>
+                <textarea
+                  value={exceptionForm.reason}
+                  onChange={(e) =>
+                    setExceptionForm({
+                      ...exceptionForm,
+                      reason: e.target.value,
+                    })
+                  }
+                  rows={3}
+                  placeholder="Lý do nghỉ hoặc thay đổi giờ..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Lưu ý:</strong> Ngoại lệ sẽ ảnh hưởng đến việc sinh
+                  slot khả dụng cho bệnh nhân.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowExceptionModal(false);
+                  setExceptionForm({
+                    doctorId: "",
+                    exceptionDate: "",
+                    exceptionType: "off",
+                    session: "",
+                    overrideStartTime: "",
+                    overrideEndTime: "",
+                    reason: "",
+                  });
+                }}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleCreateException}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+              >
+                Tạo ngoại lệ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

@@ -174,6 +174,31 @@ object DoctorDashboardService {
         }
     }
     
+    // Complete appointment
+    fun completeAppointment(userId: UUID, appointmentId: UUID): AppointmentDTO? {
+        return transaction {
+            val doctorId = SupabaseDoctors.select { SupabaseDoctors.userId eq userId }
+                .map { it[SupabaseDoctors.id] }
+                .singleOrNull() ?: return@transaction null
+            
+            val appointment = Appointments.select { 
+                (Appointments.id eq appointmentId) and (Appointments.doctorId eq doctorId)
+            }.singleOrNull() ?: return@transaction null
+            
+            val currentStatus = appointment[Appointments.status]
+            if (currentStatus != "confirmed") {
+                throw IllegalStateException("Only confirmed appointments can be completed")
+            }
+            
+            Appointments.update({ Appointments.id eq appointmentId }) {
+                it[status] = "completed"
+                it[updatedAt] = Instant.now()
+            }
+            
+            getAppointmentById(userId, appointmentId)
+        }
+    }
+    
     // Get doctor's patients
     fun getDoctorPatients(userId: UUID): List<UserDTO> {
         return transaction {
@@ -417,18 +442,33 @@ object DoctorDashboardService {
             qualifications = supabaseDoctor[SupabaseDoctors.degree]
         )
         
-        val timeSlot = TimeSlots.select { TimeSlots.id eq timeSlotId }.single()
-        val timeSlotDTO = TimeSlotDTO(
-            id = timeSlot[TimeSlots.id].toString(),
-            workScheduleId = timeSlot[TimeSlots.workScheduleId].toString(),
-            startTime = timeSlot[TimeSlots.startTime].toString(),
-            endTime = timeSlot[TimeSlots.endTime].toString(),
-            maxPatientPerSlot = timeSlot[TimeSlots.maxPatientPerSlot],
-            currentBookings = 1,
-            remainingCapacity = 0,
-            isAvailable = false,
-            createdAt = timeSlot[TimeSlots.createdAt].toString()
-        )
+        val timeSlot = timeSlotId?.let { TimeSlots.select { TimeSlots.id eq it }.singleOrNull() }
+        val timeSlotDTO = if (timeSlot != null) {
+            TimeSlotDTO(
+                id = timeSlot[TimeSlots.id].toString(),
+                workScheduleId = timeSlot[TimeSlots.workScheduleId].toString(),
+                startTime = timeSlot[TimeSlots.startTime].toString(),
+                endTime = timeSlot[TimeSlots.endTime].toString(),
+                maxPatientPerSlot = timeSlot[TimeSlots.maxPatientPerSlot],
+                currentBookings = 1,
+                remainingCapacity = 0,
+                isAvailable = false,
+                createdAt = timeSlot[TimeSlots.createdAt].toString()
+            )
+        } else {
+            // Fallback for appointments without time slots (new V2 system)
+            TimeSlotDTO(
+                id = "",
+                workScheduleId = "",
+                startTime = this[Appointments.startTime]?.toString() ?: "",
+                endTime = this[Appointments.endTime]?.toString() ?: "",
+                maxPatientPerSlot = 1,
+                currentBookings = 1,
+                remainingCapacity = 0,
+                isAvailable = false,
+                createdAt = this[Appointments.createdAt].toString()
+            )
+        }
         
         val service = serviceId?.let {
             Services.select { Services.id eq it }.singleOrNull()?.let { row ->
@@ -491,7 +531,7 @@ object DoctorDashboardService {
         
         val patientName = Users.select { Users.id eq patientId }.single()[Users.fullName]
         val supabaseDoctor = SupabaseDoctors.select { SupabaseDoctors.id eq doctorId }.single()
-        val timeSlot = TimeSlots.select { TimeSlots.id eq timeSlotId }.single()
+        val timeSlot = timeSlotId?.let { TimeSlots.select { TimeSlots.id eq it }.singleOrNull() }
         val serviceName = serviceId?.let {
             Services.select { Services.id eq it }.singleOrNull()?.get(Services.name)
         }
@@ -502,8 +542,8 @@ object DoctorDashboardService {
             doctorName = supabaseDoctor[SupabaseDoctors.fullName],
             specialtyName = supabaseDoctor[SupabaseDoctors.specialty],
             appointmentDate = this[Appointments.appointmentDate].toString(),
-            startTime = timeSlot[TimeSlots.startTime].toString(),
-            endTime = timeSlot[TimeSlots.endTime].toString(),
+            startTime = timeSlot?.get(TimeSlots.startTime)?.toString() ?: this[Appointments.startTime]?.toString() ?: "",
+            endTime = timeSlot?.get(TimeSlots.endTime)?.toString() ?: this[Appointments.endTime]?.toString() ?: "",
             status = this[Appointments.status],
             serviceName = serviceName
         )

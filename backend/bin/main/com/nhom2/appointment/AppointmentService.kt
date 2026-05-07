@@ -6,13 +6,218 @@ import com.nhom2.doctors.SupabaseDoctorService
 import com.nhom2.healthrecord.HealthRecordService
 import com.nhom2.services.ServiceService
 import com.nhom2.notification.NotificationService
+import com.nhom2.weekschedule.WeeklyScheduleService
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.LocalDate
 import java.time.Instant
+import java.time.ZoneId
 import java.util.UUID
 
 object AppointmentService {
+    
+    /**
+     * Create appointment using V2 API (time-based booking)
+     */
+    fun createAppointmentV2(patientId: UUID, request: CreateAppointmentRequestV2): Result<AppointmentDTOV2> {
+        return transaction {
+            // Validate health record exists
+            val healthRecord = HealthRecordService.getHealthRecordByUserId(patientId)
+                ?: return@transaction Result.failure(Exception("Health record not found. Please create one first."))
+
+            // Validate service exists
+            val service = ServiceService.getServiceById(UUID.fromString(request.serviceId))
+                ?: return@transaction Result.failure(Exception("Service not found"))
+
+            // Parse timestamps
+            val startTime = try {
+                Instant.parse(request.startTime)
+            } catch (e: Exception) {
+                return@transaction Result.failure(Exception("Invalid start time format. Use ISO 8601 format"))
+            }
+            
+            val endTime = try {
+                Instant.parse(request.endTime)
+            } catch (e: Exception) {
+                return@transaction Result.failure(Exception("Invalid end time format. Use ISO 8601 format"))
+            }
+            
+            val doctorId = UUID.fromString(request.doctorId)
+            
+            // Validate time slot availability
+            val validationResult = WeeklyScheduleService.validateSlot(doctorId, startTime, endTime)
+            if (validationResult.isFailure) {
+                return@transaction Result.failure(validationResult.exceptionOrNull()!!)
+            }
+            
+            // Check for overlapping appointments
+            val hasOverlap = Appointments.select {
+                (Appointments.doctorId eq doctorId) and
+                (Appointments.status inList listOf("pending", "confirmed")) and
+                (Appointments.startTime.isNotNull()) and
+                (Appointments.endTime.isNotNull()) and
+                (Appointments.startTime less endTime) and
+                (Appointments.endTime greater startTime)
+            }.count() > 0
+            
+            if (hasOverlap) {
+                return@transaction Result.failure(Exception("Time slot overlaps with an existing appointment"))
+            }
+            
+            // Validate parent appointment if this is a follow-up
+            if (request.parentAppointmentId != null) {
+                val parentId = UUID.fromString(request.parentAppointmentId)
+                val parent = Appointments.select { Appointments.id eq parentId }
+                    .singleOrNull()
+                    ?: return@transaction Result.failure(Exception("Parent appointment not found"))
+                
+                if (parent[Appointments.status] != "completed") {
+                    return@transaction Result.failure(Exception("Parent appointment must be completed"))
+                }
+                
+                // Check if follow-up is within 30 days
+                val parentEndTime = parent[Appointments.endTime]
+                    ?: return@transaction Result.failure(Exception("Parent appointment has no end time"))
+                
+                val daysDiff = java.time.Duration.between(parentEndTime, startTime).toDays()
+                if (daysDiff > 30) {
+                    return@transaction Result.failure(Exception("Follow-up must be within 30 days of original appointment"))
+                }
+            }
+            
+            val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("UTC"))
+            
+            // Validate appointment date (not a holiday)
+            val isHoliday = Holidays.select { Holidays.date eq appointmentDate }.count() > 0
+            if (isHoliday) {
+                return@transaction Result.failure(Exception("Cannot book appointment on holiday"))
+            }
+
+            // Create appointment
+            val id = Appointments.insert {
+                it[Appointments.patientId] = patientId
+                it[Appointments.doctorId] = doctorId
+                it[Appointments.healthRecordId] = UUID.fromString(healthRecord.id)
+                it[Appointments.serviceId] = UUID.fromString(request.serviceId)
+                it[Appointments.appointmentDate] = appointmentDate
+                it[Appointments.startTime] = startTime
+                it[Appointments.endTime] = endTime
+                it[Appointments.parentAppointmentId] = request.parentAppointmentId?.let { UUID.fromString(it) }
+                it[status] = "pending"
+                it[notes] = request.notes
+                it[createdAt] = Instant.now()
+                it[updatedAt] = Instant.now()
+            } get Appointments.id
+
+            // Notify doctor
+            val doctorUserId = SupabaseDoctors.select { SupabaseDoctors.id eq doctorId }
+                .singleOrNull()?.get(SupabaseDoctors.userId)
+            
+            if (doctorUserId != null) {
+                NotificationService.createNotification(CreateNotificationRequest(
+                    userId = doctorUserId.toString(),
+                    title = "New Appointment",
+                    message = "You have a new appointment request",
+                    type = "new_appointment",
+                    relatedId = id.toString()
+                ))
+            }
+
+            Result.success(getAppointmentByIdV2(id)!!)
+        }
+    }
+    
+    /**
+     * Create follow-up appointment (doctor only)
+     */
+    fun createFollowUp(doctorId: UUID, request: CreateFollowUpRequest): Result<AppointmentDTOV2> {
+        return transaction {
+            // Get parent appointment
+            val parentId = UUID.fromString(request.parentAppointmentId)
+            val parent = Appointments.select { Appointments.id eq parentId }
+                .singleOrNull()
+                ?: return@transaction Result.failure(Exception("Parent appointment not found"))
+            
+            // Verify doctor owns the parent appointment
+            if (parent[Appointments.doctorId] != doctorId) {
+                return@transaction Result.failure(Exception("You can only create follow-ups for your own appointments"))
+            }
+            
+            // Verify parent is completed
+            if (parent[Appointments.status] != "completed") {
+                return@transaction Result.failure(Exception("Parent appointment must be completed"))
+            }
+            
+            val patientId = parent[Appointments.patientId]
+            val serviceId = parent[Appointments.serviceId]
+            
+            // Parse timestamps
+            val startTime = try {
+                Instant.parse(request.startTime)
+            } catch (e: Exception) {
+                return@transaction Result.failure(Exception("Invalid start time format"))
+            }
+            
+            val endTime = try {
+                Instant.parse(request.endTime)
+            } catch (e: Exception) {
+                return@transaction Result.failure(Exception("Invalid end time format"))
+            }
+            
+            // Check if follow-up is within 30 days
+            val parentEndTime = parent[Appointments.endTime]
+                ?: return@transaction Result.failure(Exception("Parent appointment has no end time"))
+            
+            val daysDiff = java.time.Duration.between(parentEndTime, startTime).toDays()
+            if (daysDiff > 30) {
+                return@transaction Result.failure(Exception("Follow-up must be within 30 days of original appointment"))
+            }
+            
+            // Check for overlapping appointments
+            val hasOverlap = Appointments.select {
+                (Appointments.doctorId eq doctorId) and
+                (Appointments.status inList listOf("pending", "confirmed")) and
+                (Appointments.startTime.isNotNull()) and
+                (Appointments.endTime.isNotNull()) and
+                (Appointments.startTime less endTime) and
+                (Appointments.endTime greater startTime)
+            }.count() > 0
+            
+            if (hasOverlap) {
+                return@transaction Result.failure(Exception("Time slot overlaps with an existing appointment"))
+            }
+            
+            val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("UTC"))
+            val healthRecordId = parent[Appointments.healthRecordId]
+            
+            // Create follow-up appointment
+            val id = Appointments.insert {
+                it[Appointments.patientId] = patientId
+                it[Appointments.doctorId] = doctorId
+                it[Appointments.healthRecordId] = healthRecordId
+                it[Appointments.serviceId] = serviceId
+                it[Appointments.appointmentDate] = appointmentDate
+                it[Appointments.startTime] = startTime
+                it[Appointments.endTime] = endTime
+                it[Appointments.parentAppointmentId] = parentId
+                it[status] = "confirmed" // Follow-ups are auto-confirmed
+                it[notes] = request.notes
+                it[createdAt] = Instant.now()
+                it[updatedAt] = Instant.now()
+            } get Appointments.id
+            
+            // Notify patient
+            NotificationService.createNotification(CreateNotificationRequest(
+                userId = patientId.toString(),
+                title = "Follow-up Appointment Scheduled",
+                message = "Your doctor has scheduled a follow-up appointment",
+                type = "followup_scheduled",
+                relatedId = id.toString()
+            ))
+            
+            Result.success(getAppointmentByIdV2(id)!!)
+        }
+    }
     
     fun createAppointment(patientId: UUID, request: CreateAppointmentRequest): Result<AppointmentDTO> {
         return transaction {
@@ -125,6 +330,15 @@ object AppointmentService {
                 .singleOrNull() ?: return@transaction null
 
             appointment.toAppointmentDTO()
+        }
+    }
+    
+    fun getAppointmentByIdV2(id: UUID): AppointmentDTOV2? {
+        return transaction {
+            val appointment = Appointments.select { Appointments.id eq id }
+                .singleOrNull() ?: return@transaction null
+
+            appointment.toAppointmentDTOV2()
         }
     }
 
@@ -249,7 +463,9 @@ object AppointmentService {
         val patient = Users.select { Users.id eq patientId }.single().toUserDTO()
         val doctor = SupabaseDoctorService.getDoctorSummary(doctorId)!!
         val healthRecord = HealthRecordService.getHealthRecordById(healthRecordId)!!
-        val timeSlot = TimeSlots.select { TimeSlots.id eq timeSlotId }.single().toTimeSlotDTO()
+        val timeSlot = timeSlotId?.let { 
+            TimeSlots.select { TimeSlots.id eq it }.singleOrNull()?.toTimeSlotDTO() 
+        }
         val service = serviceId?.let { ServiceService.getServiceById(it) }
 
         return AppointmentDTO(
@@ -257,12 +473,52 @@ object AppointmentService {
             patient = patient,
             doctor = doctor,
             healthRecord = healthRecord,
-            timeSlot = timeSlot,
+            timeSlot = timeSlot ?: TimeSlotDTO(
+                id = "",
+                workScheduleId = "",
+                startTime = this[Appointments.startTime]?.toString() ?: "",
+                endTime = this[Appointments.endTime]?.toString() ?: "",
+                maxPatientPerSlot = 1,
+                currentBookings = 0,
+                remainingCapacity = 1,
+                isAvailable = false,
+                createdAt = ""
+            ),
             service = service,
             appointmentDate = this[Appointments.appointmentDate].toString(),
             status = this[Appointments.status],
             notes = this[Appointments.notes],
             cancellationReason = this[Appointments.cancellationReason],
+            createdAt = this[Appointments.createdAt].toString(),
+            updatedAt = this[Appointments.updatedAt].toString()
+        )
+    }
+    
+    private fun ResultRow.toAppointmentDTOV2(): AppointmentDTOV2 {
+        val patientId = this[Appointments.patientId]
+        val doctorId = this[Appointments.doctorId]
+        val healthRecordId = this[Appointments.healthRecordId]
+        val serviceId = this[Appointments.serviceId]
+
+        val patient = Users.select { Users.id eq patientId }.single().toUserDTO()
+        val doctor = SupabaseDoctorService.getDoctorSummary(doctorId)!!
+        val healthRecord = HealthRecordService.getHealthRecordById(healthRecordId)!!
+        val service = serviceId?.let { ServiceService.getServiceById(it) }
+
+        return AppointmentDTOV2(
+            id = this[Appointments.id].toString(),
+            patient = patient,
+            doctor = doctor,
+            healthRecord = healthRecord,
+            service = service,
+            startTime = this[Appointments.startTime]?.toString(),
+            endTime = this[Appointments.endTime]?.toString(),
+            appointmentDate = this[Appointments.appointmentDate].toString(),
+            status = this[Appointments.status],
+            notes = this[Appointments.notes],
+            cancellationReason = this[Appointments.cancellationReason],
+            parentAppointmentId = this[Appointments.parentAppointmentId]?.toString(),
+            isFollowUp = this[Appointments.parentAppointmentId] != null,
             createdAt = this[Appointments.createdAt].toString(),
             updatedAt = this[Appointments.updatedAt].toString()
         )

@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import DoctorLayout from "@/components/layout/DoctorLayout";
 import { doctorApi } from "@/lib/doctorApi";
+import { User as UserType } from "@/types";
 import {
-  User,
+  User as UserIcon,
   Calendar,
   Phone,
   Mail,
-  MapPin,
   AlertCircle,
   FileText,
   Clock,
@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 interface PatientHealthRecord {
-  patient: User;
+  patient: UserType;
   profile: {
     id: string;
     userId: string;
@@ -57,7 +57,7 @@ export default function PatientHealthRecordPage() {
   const loadHealthRecord = async () => {
     try {
       const data = await doctorApi.getPatientHealthRecord(patientId);
-      setHealthRecord(data);
+      setHealthRecord(data as any); // Backend returns different structure
     } catch (error: any) {
       console.error("Failed to load health record:", error);
       setError(
@@ -176,7 +176,7 @@ export default function PatientHealthRecordPage() {
                 )}
                 {healthRecord.profile?.gender && (
                   <div className="flex items-center text-sm text-gray-600">
-                    <User className="w-4 h-4 mr-2" />
+                    <UserIcon className="w-4 h-4 mr-2" />
                     Giới tính:{" "}
                     {healthRecord.profile.gender === "male"
                       ? "Nam"

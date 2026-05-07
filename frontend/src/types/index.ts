@@ -75,23 +75,25 @@ export interface Specialty {
 }
 
 // Doctor types
+// DoctorSummary is used in appointments (from backend DoctorSummaryDTO)
 export interface DoctorSummary {
   id: string;
   fullName: string;
-  specialty: string; // Changed from specialtyName to specialty (text)
-  avatarUrl?: string; // Changed from avatar to avatarUrl
-  degree?: string; // Changed from qualifications to degree
+  specialtyName: string; // Matches backend DoctorSummaryDTO
+  avatar?: string; // Matches backend DoctorSummaryDTO
+  qualifications?: string; // Matches backend DoctorSummaryDTO
 }
 
+// Doctor is used in doctor management (from backend SupabaseDoctorDTO)
 export interface Doctor {
   id: string;
-  userId?: string; // Made optional (nullable in Supabase)
-  user?: User; // Made optional
-  fullName: string; // Added fullName
-  specialty: string; // Changed from Specialty object to string
-  degree?: string; // Changed from qualifications to degree
+  userId?: string;
+  user?: User;
+  fullName: string;
+  specialty: string; // Matches backend SupabaseDoctorDTO
+  degree?: string; // Matches backend SupabaseDoctorDTO
   bio?: string;
-  avatarUrl?: string; // Changed from avatar to avatarUrl
+  avatarUrl?: string; // Matches backend SupabaseDoctorDTO
   isActive: boolean;
   createdAt: string;
 }

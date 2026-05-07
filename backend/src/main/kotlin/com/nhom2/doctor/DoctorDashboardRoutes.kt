@@ -203,6 +203,79 @@ fun Route.doctorDashboardRoutes() {
                 }
             }
 
+            // Complete appointment
+            put("/appointments/{id}/complete") {
+                try {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = UUID.fromString(principal!!.payload.getClaim("userId").asString())
+                    val role = principal.payload.getClaim("role").asString()
+                    
+                    if (role != "doctor") {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(error = "FORBIDDEN", message = "Access denied"))
+                        return@put
+                    }
+
+                    val appointmentId = UUID.fromString(call.parameters["id"])
+                    val appointment = DoctorDashboardService.completeAppointment(userId, appointmentId)
+                    
+                    if (appointment != null) {
+                        call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = appointment))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(error = "NOT_FOUND", message = "Appointment not found or access denied"))
+                    }
+                } catch (e: IllegalStateException) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse(error = "INVALID_STATE", message = e.message ?: "Cannot complete appointment")
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "UPDATE_FAILED", message = e.message ?: "Failed to complete appointment")
+                    )
+                }
+            }
+
+            // Create follow-up appointment
+            post("/appointments/follow-up") {
+                try {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = UUID.fromString(principal!!.payload.getClaim("userId").asString())
+                    val role = principal.payload.getClaim("role").asString()
+                    
+                    if (role != "doctor") {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(error = "FORBIDDEN", message = "Access denied"))
+                        return@post
+                    }
+
+                    // Get doctor ID from user ID
+                    val doctor = com.nhom2.doctors.SupabaseDoctorService.getDoctorByUserId(userId)
+                    if (doctor == null) {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(error = "NOT_FOUND", message = "Doctor profile not found"))
+                        return@post
+                    }
+
+                    val request = call.receive<CreateFollowUpRequest>()
+                    val result = com.nhom2.appointment.AppointmentService.createFollowUp(UUID.fromString(doctor.id), request)
+                    
+                    result.onSuccess { appointment ->
+                        call.respond(HttpStatusCode.Created, ApiResponse(success = true, data = appointment))
+                    }.onFailure { error ->
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ErrorResponse(error = "CREATE_FAILED", message = error.message ?: "Failed to create follow-up")
+                        )
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred")
+                    )
+                }
+            }
+
             // Get doctor's patients (who have appointments)
             get("/patients") {
                 try {

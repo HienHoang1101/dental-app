@@ -284,6 +284,19 @@ export const adminApi = {
     return response.data.data || [];
   },
 
+  getMonthSchedules: async (
+    year: number,
+    month: number,
+  ): Promise<string[]> => {
+    const response = await api.get<ApiResponse<string[]>>(
+      "/admin/doctor-schedules/month",
+      {
+        params: { year, month },
+      },
+    );
+    return response.data.data || [];
+  },
+
   createWorkSchedule: async (data: {
     doctorId: string;
     shiftId: string;
@@ -371,5 +384,65 @@ export const adminApi = {
       "/admin/create-default-specialty",
     );
     return response.data.data;
+  },
+
+  // V2: Schedule change requests management
+  getScheduleChangeRequests: async (params?: {
+    status?: "pending" | "approved" | "rejected";
+    doctorId?: string;
+  }): Promise<any[]> => {
+    const response = await api.get<ApiResponse<PaginatedResponse<any>>>(
+      "/admin/schedule-change-requests",
+      { params },
+    );
+    return response.data.data?.items || [];
+  },
+
+  approveScheduleChange: async (id: string): Promise<any> => {
+    const response = await api.post<ApiResponse<any>>(
+      `/admin/schedule-change-requests/${id}/approve`,
+    );
+    return response.data.data!;
+  },
+
+  rejectScheduleChange: async (id: string, reason: string): Promise<any> => {
+    const response = await api.post<ApiResponse<any>>(
+      `/admin/schedule-change-requests/${id}/reject`,
+      { rejectionReason: reason },
+    );
+    return response.data.data!;
+  },
+
+  // V2: Schedule exceptions management
+  getScheduleExceptions: async (params: {
+    doctorId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<any[]> => {
+    const response = await api.get<ApiResponse<any[]>>(
+      `/admin/schedule-exceptions`,
+      { params },
+    );
+    return response.data.data || [];
+  },
+
+  createScheduleException: async (data: {
+    doctorId: string;
+    exceptionDate: string;
+    exceptionType: "off" | "override";
+    session?: "morning" | "afternoon";
+    overrideStartTime?: string;
+    overrideEndTime?: string;
+    reason?: string;
+  }): Promise<any> => {
+    const response = await api.post<ApiResponse<any>>(
+      "/admin/schedule-exceptions",
+      data,
+    );
+    return response.data.data!;
+  },
+
+  deleteScheduleException: async (id: string): Promise<void> => {
+    await api.delete(`/admin/schedule-exceptions/${id}`);
   },
 };

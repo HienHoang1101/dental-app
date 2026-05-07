@@ -21,7 +21,9 @@ export default function ConfirmAppointmentPage() {
   const searchParams = useSearchParams();
   const doctorId = searchParams.get("doctorId");
   const serviceId = searchParams.get("serviceId");
-  const timeSlotId = searchParams.get("timeSlotId");
+  const timeSlotId = searchParams.get("timeSlotId"); // Old system
+  const startTime = searchParams.get("startTime"); // New system
+  const endTime = searchParams.get("endTime"); // New system
   const date = searchParams.get("date");
 
   const [doctor, setDoctor] = useState<Doctor | null>(null);
@@ -37,29 +39,32 @@ export default function ConfirmAppointmentPage() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (!doctorId || !timeSlotId || !date) {
+    if (!doctorId || !date || (!timeSlotId && (!startTime || !endTime))) {
       router.push("/patient/appointments/book");
       return;
     }
     loadData();
-  }, [doctorId, timeSlotId, date]);
+  }, [doctorId, timeSlotId, startTime, endTime, date]);
 
   const loadData = async () => {
     try {
-      const [doctorData, slotsData, servicesData, healthRecordData] =
-        await Promise.all([
-          patientApi.getDoctorById(doctorId!),
-          patientApi.getAvailableTimeSlots({
-            doctorId: doctorId!,
-            date: date!,
-          }),
-          patientApi.getServices(),
-          patientApi.getHealthRecord(),
-        ]);
+      const [doctorData, servicesData, healthRecordData] = await Promise.all([
+        patientApi.getDoctorById(doctorId!),
+        patientApi.getServices(),
+        patientApi.getHealthRecord(),
+      ]);
 
       setDoctor(doctorData);
-      const slot = slotsData.find((s) => s.id === timeSlotId);
-      setTimeSlot(slot || null);
+
+      // Load time slot only if using old system
+      if (timeSlotId) {
+        const slotsData = await patientApi.getAvailableTimeSlots({
+          doctorId: doctorId!,
+          date: date!,
+        });
+        const slot = slotsData.find((s) => s.id === timeSlotId);
+        setTimeSlot(slot || null);
+      }
 
       // Filter active services
       const activeServices = servicesData.filter((s) => s.isActive);
@@ -90,7 +95,7 @@ export default function ConfirmAppointmentPage() {
   };
 
   const handleSubmit = async () => {
-    if (!doctor || !timeSlot || !healthRecord || !selectedServiceId) {
+    if (!doctor || !healthRecord || !selectedServiceId) {
       setError("Vui lòng chọn dịch vụ trước khi đặt lịch");
       return;
     }
@@ -99,13 +104,28 @@ export default function ConfirmAppointmentPage() {
     setSubmitting(true);
 
     try {
-      await patientApi.createAppointment({
-        doctorId: doctor.id,
-        timeSlotId: timeSlot.id,
-        serviceId: selectedServiceId,
-        appointmentDate: date!,
-        notes: notes.trim() || undefined,
-      });
+      // Use V2 API if startTime/endTime provided, otherwise use old API
+      if (startTime && endTime) {
+        await patientApi.createAppointmentV2({
+          doctorId: doctor.id,
+          startTime: startTime,
+          endTime: endTime,
+          serviceId: selectedServiceId,
+          notes: notes.trim() || undefined,
+        });
+      } else if (timeSlot) {
+        await patientApi.createAppointment({
+          doctorId: doctor.id,
+          timeSlotId: timeSlot.id,
+          serviceId: selectedServiceId,
+          appointmentDate: date!,
+          notes: notes.trim() || undefined,
+        });
+      } else {
+        setError("Thông tin khung giờ không hợp lệ");
+        setSubmitting(false);
+        return;
+      }
 
       setSuccess(true);
       setTimeout(() => {
@@ -153,7 +173,12 @@ export default function ConfirmAppointmentPage() {
     );
   }
 
-  if (!doctor || !timeSlot || !service || !healthRecord) {
+  if (
+    !doctor ||
+    !service ||
+    !healthRecord ||
+    (!timeSlot && (!startTime || !endTime))
+  ) {
     return (
       <PatientLayout>
         <div className="max-w-2xl mx-auto">
@@ -178,6 +203,18 @@ export default function ConfirmAppointmentPage() {
       style: "currency",
       currency: "VND",
     }).format(parseInt(price));
+  };
+
+  // Format time display for V2 system
+  const formatTimeDisplay = () => {
+    if (timeSlot) {
+      return `${timeSlot.startTime.substring(0, 5)} - ${timeSlot.endTime.substring(0, 5)}`;
+    } else if (startTime && endTime) {
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      return `${start.getHours().toString().padStart(2, "0")}:${start.getMinutes().toString().padStart(2, "0")} - ${end.getHours().toString().padStart(2, "0")}:${end.getMinutes().toString().padStart(2, "0")}`;
+    }
+    return "";
   };
 
   return (
@@ -234,8 +271,7 @@ export default function ConfirmAppointmentPage() {
               <div>
                 <p className="text-sm text-gray-600">Giờ khám</p>
                 <p className="font-semibold text-gray-900">
-                  {timeSlot.startTime.substring(0, 5)} -{" "}
-                  {timeSlot.endTime.substring(0, 5)}
+                  {formatTimeDisplay()}
                 </p>
               </div>
             </div>

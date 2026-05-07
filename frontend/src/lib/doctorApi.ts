@@ -31,7 +31,7 @@ export const doctorApi = {
     const response = await api.get<ApiResponse<PaginatedResponse<Appointment>>>(
       "/doctor/appointments",
       {
-        params: filter,
+        params: { ...filter, _t: Date.now() },
       },
     );
     return response.data.data!;
@@ -60,6 +60,13 @@ export const doctorApi = {
       {
         cancellationReason: reason,
       },
+    );
+    return response.data.data!;
+  },
+
+  completeAppointment: async (id: string): Promise<Appointment> => {
+    const response = await api.put<ApiResponse<Appointment>>(
+      `/doctor/appointments/${id}/complete`,
     );
     return response.data.data!;
   },
@@ -97,6 +104,73 @@ export const doctorApi = {
   }): Promise<WorkSchedule> => {
     const response = await api.post<ApiResponse<WorkSchedule>>(
       "/doctor/work-schedules",
+      data,
+    );
+    return response.data.data!;
+  },
+
+  // V2: Weekly schedule management
+  getMyWeeklySchedules: async (): Promise<
+    Array<{
+      id: string;
+      doctorId: string;
+      dayOfWeek: number;
+      session: "morning" | "afternoon";
+      startTime: string;
+      endTime: string;
+      isActive: boolean;
+    }>
+  > => {
+    // Get from auth-storage (Zustand persist)
+    const authStorage = localStorage.getItem("auth-storage");
+    const authData = authStorage ? JSON.parse(authStorage) : null;
+    const doctorId = authData?.state?.user?.doctorId;
+
+    if (!doctorId) throw new Error("Doctor ID not found");
+
+    const response = await api.get<
+      ApiResponse<
+        Array<{
+          id: string;
+          doctorId: string;
+          dayOfWeek: number;
+          session: "morning" | "afternoon";
+          startTime: string;
+          endTime: string;
+          isActive: boolean;
+        }>
+      >
+    >(`/doctors/${doctorId}/weekly-schedules`);
+    return response.data.data || [];
+  },
+
+  requestScheduleChange: async (data: {
+    requestType: "add" | "remove" | "modify";
+    oldScheduleData?: any;
+    newScheduleData?: any;
+  }): Promise<any> => {
+    const response = await api.post<ApiResponse<any>>(
+      "/doctor/schedule-change-requests",
+      data,
+    );
+    return response.data.data!;
+  },
+
+  getMyScheduleChangeRequests: async (): Promise<any[]> => {
+    const response = await api.get<ApiResponse<any[]>>(
+      "/doctor/schedule-change-requests",
+    );
+    return response.data.data || [];
+  },
+
+  createFollowUpAppointment: async (data: {
+    parentAppointmentId: string;
+    startTime: string;
+    endTime: string;
+    notes?: string;
+  }): Promise<Appointment> => {
+    const response = await api.post<ApiResponse<Appointment>>(
+      "/doctor/appointments/follow-up",
       data,
     );
     return response.data.data!;
