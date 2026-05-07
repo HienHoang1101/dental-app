@@ -7,15 +7,16 @@ models/__huggingface_repos__.json
 models/*.png
 models/*.OLD
 
+# Secrets
+.env
+
 # Python
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 .venv-py313-backup/
 venv/
-
-# Environment
-.env
 
 # IDE
 .vscode/
@@ -25,3 +26,5 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Logs
+*.log
