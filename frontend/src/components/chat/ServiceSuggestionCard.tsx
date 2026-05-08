@@ -27,13 +27,13 @@ export function ServiceSuggestionCard({
 
       // Navigate to booking page with service and session info
       router.push(
-        `/booking?serviceId=${suggestion.serviceId}&sessionId=${sessionId}`,
+        `/patient/appointments/book/by-specialty/select-date?serviceId=${suggestion.serviceId}&sessionId=${sessionId}`,
       );
     } catch (error) {
       console.error("Failed to create summary:", error);
       // Still navigate even if summary fails
       router.push(
-        `/booking?serviceId=${suggestion.serviceId}&sessionId=${sessionId}`,
+        `/patient/appointments/book/by-specialty/select-date?serviceId=${suggestion.serviceId}&sessionId=${sessionId}`,
       );
     }
   };

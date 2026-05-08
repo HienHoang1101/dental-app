@@ -70,6 +70,32 @@ export default function SelectDoctorBySpecialtyPage() {
     }
   };
 
+  const formatTimeSlot = (slot: { start: string; end: string }): string => {
+    const start = new Date(slot.start);
+    const end = new Date(slot.end);
+    return `${start.getHours().toString().padStart(2, "0")}:${start.getMinutes().toString().padStart(2, "0")} - ${end.getHours().toString().padStart(2, "0")}:${end.getMinutes().toString().padStart(2, "0")}`;
+  };
+
+  const groupSlotsBySession = (
+    slots: Array<{ start: string; end: string }>,
+  ) => {
+    const morning: Array<{ start: string; end: string }> = [];
+    const afternoon: Array<{ start: string; end: string }> = [];
+
+    slots.forEach((slot) => {
+      const hour = new Date(slot.start).getHours();
+      if (hour < 12) {
+        morning.push(slot);
+      } else {
+        afternoon.push(slot);
+      }
+    });
+
+    return { morning, afternoon };
+  };
+
+  const { morning, afternoon } = groupSlotsBySession(timeSlots);
+
   if (loading) {
     return (
       <PatientLayout>
@@ -169,35 +195,64 @@ export default function SelectDoctorBySpecialtyPage() {
               </div>
             ) : (
               <div className="bg-white rounded-lg shadow-md p-6">
-                <div className="grid grid-cols-2 gap-3">
-                  {timeSlots.map((slot, index) => {
-                    const start = new Date(slot.start);
-                    const timeStr = start.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      hour12: false,
-                    });
-                    const isSelected =
-                      selectedSlot?.start === slot.start &&
-                      selectedSlot?.end === slot.end;
+                <div className="space-y-6 max-h-[500px] overflow-y-auto">
+                  {/* Morning Slots */}
+                  {morning.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">
+                        Buổi sáng
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {morning.map((slot, index) => (
+                          <button
+                            key={index}
+                            onClick={() => setSelectedSlot(slot)}
+                            className={`p-3 rounded-lg border-2 transition-all text-center ${
+                              selectedSlot?.start === slot.start
+                                ? "border-blue-600 bg-blue-50"
+                                : "border-gray-200 hover:border-blue-400 hover:bg-blue-50"
+                            }`}
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              <span className="font-medium text-sm">
+                                {formatTimeSlot(slot)}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                    return (
-                      <button
-                        key={index}
-                        onClick={() => setSelectedSlot(slot)}
-                        className={`p-3 rounded-lg border-2 transition-all text-center ${
-                          isSelected
-                            ? "border-blue-600 bg-blue-50"
-                            : "border-gray-200 hover:border-blue-400 hover:bg-blue-50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          <span className="font-medium">{timeStr}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
+                  {/* Afternoon Slots */}
+                  {afternoon.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">
+                        Buổi chiều
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {afternoon.map((slot, index) => (
+                          <button
+                            key={index}
+                            onClick={() => setSelectedSlot(slot)}
+                            className={`p-3 rounded-lg border-2 transition-all text-center ${
+                              selectedSlot?.start === slot.start
+                                ? "border-blue-600 bg-blue-50"
+                                : "border-gray-200 hover:border-blue-400 hover:bg-blue-50"
+                            }`}
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              <span className="font-medium text-sm">
+                                {formatTimeSlot(slot)}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

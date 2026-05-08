@@ -46,7 +46,7 @@ export default function BookingPage() {
             cấp thông tin cá nhân và tình trạng sức khỏe của bạn.
           </p>
           <button
-            onClick={() => router.push("/booking/create-profile")}
+            onClick={() => router.push("/patient/appointments/book/create-profile")}
             className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
           >
             Tạo hồ sơ ngay
@@ -75,7 +75,7 @@ export default function BookingPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* By Specialty */}
           <button
-            onClick={() => router.push("/booking/by-specialty")}
+            onClick={() => router.push("/patient/appointments/book/by-specialty")}
             className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow text-left group"
           >
             <div className="bg-blue-100 p-4 rounded-lg w-fit mb-4 group-hover:bg-blue-200 transition-colors">
@@ -94,7 +94,7 @@ export default function BookingPage() {
 
           {/* By Doctor */}
           <button
-            onClick={() => router.push("/booking/by-doctor")}
+            onClick={() => router.push("/patient/appointments/book/by-doctor")}
             className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow text-left group"
           >
             <div className="bg-green-100 p-4 rounded-lg w-fit mb-4 group-hover:bg-green-200 transition-colors">
@@ -111,7 +111,7 @@ export default function BookingPage() {
 
           {/* By Date */}
           <button
-            onClick={() => router.push("/booking/by-date")}
+            onClick={() => router.push("/patient/appointments/book/by-date")}
             className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow text-left group"
           >
             <div className="bg-purple-100 p-4 rounded-lg w-fit mb-4 group-hover:bg-purple-200 transition-colors">
