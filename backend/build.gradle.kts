@@ -41,6 +41,9 @@ dependencies {
     implementation("io.ktor:ktor-client-cio:2.3.7")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
+    implementation(libs.google.auth.library)
+    implementation("com.google.api-client:google-api-client:2.2.0")
+    implementation("com.google.http-client:google-http-client-gson:1.43.3")
     
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)

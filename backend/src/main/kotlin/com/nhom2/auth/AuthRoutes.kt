@@ -44,5 +44,23 @@ fun Route.authRoutes() {
                 )
             }
         }
+
+        post("/google") {
+            try {
+                val request = call.receive<GoogleLoginRequest>()
+                val response = AuthService.googleLogin(request.credential)
+                call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = response))
+            } catch (e: IllegalArgumentException) {
+                call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse(error = "GOOGLE_LOGIN_FAILED", message = e.message ?: "Đăng nhập Google thất bại")
+                )
+            } catch (e: Exception) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse(error = "SERVER_ERROR", message = "Đã xảy ra lỗi khi xác thực Google.")
+                )
+            }
+        }
     }
 }

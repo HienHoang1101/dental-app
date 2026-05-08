@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authApi } from "@/lib/authApi";
 import { useAuthStore } from "@/stores/authStore";
+import { GoogleLogin } from "@react-oauth/google";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +14,28 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    setError("");
+    setLoading(true);
+    try {
+      const response = await authApi.googleLogin(credentialResponse.credential);
+      login(response.token, response.user);
+      
+      // Redirect based on role
+      if (response.user.role === "admin") {
+        router.push("/admin/dashboard");
+      } else if (response.user.role === "doctor") {
+        router.push("/doctor/dashboard");
+      } else {
+        router.push("/patient/dashboard");
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Đăng nhập Google thất bại");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,6 +117,26 @@ export default function LoginPage() {
           >
             {loading ? "Đang đăng nhập..." : "Đăng nhập"}
           </button>
+
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-white px-2 text-gray-500">Hoặc đăng nhập bằng</span>
+            </div>
+          </div>
+
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError("Đăng nhập Google thất bại")}
+              useOneTap
+              theme="outline"
+              size="large"
+              width="100%"
+            />
+          </div>
         </form>
       </div>
     </div>

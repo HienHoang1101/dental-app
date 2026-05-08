@@ -6,8 +6,12 @@ import com.nhom2.config.JwtConfig
 import com.nhom2.models.Users
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier
+import com.google.api.client.http.javanet.NetHttpTransport
+import com.google.api.client.json.gson.GsonFactory
 import java.time.Instant
 import java.util.*
+import io.github.cdimascio.dotenv.Dotenv
 
 object AuthService {
     fun register(request: RegisterRequest): LoginResponse {
@@ -105,6 +109,55 @@ object AuthService {
             val userData = getUserById(userId)!!
 
             LoginResponse(token = token, user = userData)
+        }
+    }
+
+    fun googleLogin(idToken: String): LoginResponse {
+        val dotenv = Dotenv.load()
+        val clientId = dotenv["GOOGLE_CLIENT_ID"] ?: System.getenv("GOOGLE_CLIENT_ID")
+            ?: throw IllegalStateException("GOOGLE_CLIENT_ID not found")
+
+        val transport = NetHttpTransport()
+        val jsonFactory = GsonFactory.getDefaultInstance()
+        
+        val verifier = GoogleIdTokenVerifier.Builder(transport, jsonFactory)
+            .setAudience(listOf(clientId))
+            .build()
+
+        val token = try {
+            verifier.verify(idToken)
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Lỗi khi xác thực token Google: ${e.message}")
+        } ?: throw IllegalArgumentException("Token Google không hợp lệ")
+
+        val payload = token.payload
+        val email = payload.email
+        val fullName = payload["name"] as String? ?: "Người dùng Google"
+
+        return transaction {
+            // Find existing user
+            val existingUser = Users.select { Users.email eq email.trim().lowercase() }.singleOrNull()
+            
+            val userId = if (existingUser == null) {
+                // Auto-register new user
+                Users.insert {
+                    it[Users.email] = email.trim().lowercase()
+                    it[Users.passwordHash] = null // No password for Google users
+                    it[Users.fullName] = fullName
+                    it[Users.role] = "patient"
+                    it[Users.isActive] = true
+                    it[Users.createdAt] = Instant.now()
+                    it[Users.updatedAt] = Instant.now()
+                } get Users.id
+            } else {
+                existingUser[Users.id]
+            }
+
+            val role = existingUser?.get(Users.role) ?: "patient"
+            val jwtToken = JwtConfig.generateToken(userId, role)
+            val userData = getUserById(userId)!!
+
+            LoginResponse(token = jwtToken, user = userData)
         }
     }
 
