@@ -3,21 +3,13 @@
 import { useEffect, useState } from "react";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { adminApi } from "@/lib/adminApi";
-import { Service } from "@/types";
+import { Service, Specialty } from "@/types";
 
-const SERVICE_CATEGORIES = [
-  { value: "examination", label: "Khám tổng quát" },
-  { value: "treatment", label: "Điều trị" },
-  { value: "surgery", label: "Phẫu thuật" },
-  { value: "cosmetic", label: "Thẩm mỹ" },
-  { value: "orthodontics", label: "Chỉnh nha" },
-  { value: "implant", label: "Cấy ghép" },
-  { value: "cleaning", label: "Vệ sinh răng miệng" },
-  { value: "other", label: "Khác" },
-];
+// Remove hardcoded SERVICE_CATEGORIES as we'll use specialties from API
 
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
+  const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -26,7 +18,7 @@ export default function ServicesPage() {
     description: "",
     price: "",
     duration: 30,
-    category: "",
+    specialtyId: "",
   });
 
   useEffect(() => {
@@ -35,8 +27,12 @@ export default function ServicesPage() {
 
   const loadServices = async () => {
     try {
-      const data = await adminApi.getServices();
-      setServices(data);
+      const [servicesData, specialtiesData] = await Promise.all([
+        adminApi.getServices(),
+        adminApi.getSpecialties(),
+      ]);
+      setServices(servicesData);
+      setSpecialties(specialtiesData);
     } catch (error) {
       console.error("Failed to load services:", error);
     } finally {
@@ -56,9 +52,13 @@ export default function ServicesPage() {
           formData.description && formData.description.trim()
             ? formData.description.trim()
             : null,
+        specialtyId:
+          formData.specialtyId && formData.specialtyId.trim()
+            ? formData.specialtyId.trim()
+            : null,
         category:
-          formData.category && formData.category.trim()
-            ? formData.category.trim()
+          formData.specialtyId && formData.specialtyId.trim()
+            ? specialties.find((s) => s.id === formData.specialtyId)?.name
             : null,
         isActive: editingService ? undefined : true, // Only set for create
       };
@@ -81,7 +81,7 @@ export default function ServicesPage() {
         description: "",
         price: "",
         duration: 30,
-        category: "",
+        specialtyId: "",
       });
       loadServices();
     } catch (error: any) {
@@ -100,7 +100,7 @@ export default function ServicesPage() {
       description: service.description || "",
       price: service.price,
       duration: service.duration,
-      category: service.category || "",
+      specialtyId: service.specialtyId || "",
     });
     setShowModal(true);
   };
@@ -139,7 +139,7 @@ export default function ServicesPage() {
                 description: "",
                 price: "",
                 duration: 30,
-                category: "",
+                specialtyId: "",
               });
               setShowModal(true);
             }}
@@ -296,19 +296,19 @@ export default function ServicesPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Danh mục
+                    Chuyên khoa (Danh mục)
                   </label>
                   <select
-                    value={formData.category}
+                    value={formData.specialtyId}
                     onChange={(e) =>
-                      setFormData({ ...formData, category: e.target.value })
+                      setFormData({ ...formData, specialtyId: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">-- Chọn danh mục --</option>
-                    {SERVICE_CATEGORIES.map((cat) => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
+                    <option value="">-- Chọn chuyên khoa --</option>
+                    {specialties.map((spec) => (
+                      <option key={spec.id} value={spec.id}>
+                        {spec.name}
                       </option>
                     ))}
                   </select>
