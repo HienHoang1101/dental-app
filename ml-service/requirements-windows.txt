@@ -1,0 +1,34 @@
+# ── Core API ──────────────────────────────────────────────────
+fastapi==0.136.0
+uvicorn[standard]==0.29.0
+python-dotenv==1.0.1
+pydantic==2.13.1
+
+# ── ML / Classify ─────────────────────────────────────────────
+# Dùng phiên bản có pre-built wheel cho Windows
+scikit-learn>=1.5.0,<1.6.0
+joblib==1.5.3
+numpy==2.4.4
+
+# ── Deep Learning (PhoBERT) ───────────────────────────────────
+# CPU version cho Windows
+torch>=2.0.0
+transformers==4.57.6
+safetensors==0.7.0
+tokenizers==0.22.2
+
+# ── Embedding (RAG) ───────────────────────────────────────────
+sentence-transformers==2.7.0
+
+# ── NLP / Tokenization ────────────────────────────────────────
+underthesea==9.4.0
+
+# ── Vector DB ─────────────────────────────────────────────────
+pinecone-client==3.2.2
+
+# ── LLM ───────────────────────────────────────────────────────
+google-generativeai==0.5.4
+google-genai==1.73.1
+
+# ── PDF ───────────────────────────────────────────────────────
+PyPDF2==3.0.1

@@ -1,34 +1,29 @@
 package com.nhom2.auth
 
+import com.nhom2.common.*
 import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
 fun Route.authRoutes() {
     route("/auth") {
-
         post("/register") {
             try {
                 val request = call.receive<RegisterRequest>()
-
-                // Validation
-                if (request.email.isBlank() || !request.email.contains("@")) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Email không hợp lệ"))
-                    return@post
-                }
-                if (request.password.length < 8) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Mật khẩu tối thiểu 8 ký tự"))
-                    return@post
-                }
-
                 val response = AuthService.register(request)
-                call.respond(HttpStatusCode.Created, response)
+                call.respond(HttpStatusCode.Created, ApiResponse(success = true, data = response))
             } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.Conflict, ErrorResponse(e.message ?: "Lỗi đăng ký"))
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponse(error = "REGISTRATION_FAILED", message = e.message ?: "Đăng ký thất bại")
+                )
+            } catch (e: Exception) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse(error = "SERVER_ERROR", message = "Đã xảy ra lỗi trong quá trình đăng ký. Vui lòng thử lại sau.")
+                )
             }
         }
 
@@ -36,22 +31,35 @@ fun Route.authRoutes() {
             try {
                 val request = call.receive<LoginRequest>()
                 val response = AuthService.login(request)
-                call.respond(HttpStatusCode.OK, response)
+                call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = response))
             } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.Unauthorized, ErrorResponse(e.message ?: "Sai thông tin đăng nhập"))
+                call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse(error = "LOGIN_FAILED", message = e.message ?: "Đăng nhập thất bại")
+                )
+            } catch (e: Exception) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse(error = "SERVER_ERROR", message = "Đã xảy ra lỗi trong quá trình đăng nhập. Vui lòng thử lại sau.")
+                )
             }
         }
 
-        authenticate("auth-jwt") {
-            get("/me") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.getClaim("userId", String::class)
-                    ?: return@get call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Token không hợp lệ"))
-
-                val user = AuthService.getUserById(userId)
-                    ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("User không tồn tại"))
-
-                call.respond(HttpStatusCode.OK, user)
+        post("/google") {
+            try {
+                val request = call.receive<GoogleLoginRequest>()
+                val response = AuthService.googleLogin(request.credential)
+                call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = response))
+            } catch (e: IllegalArgumentException) {
+                call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse(error = "GOOGLE_LOGIN_FAILED", message = e.message ?: "Đăng nhập Google thất bại")
+                )
+            } catch (e: Exception) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse(error = "SERVER_ERROR", message = "Đã xảy ra lỗi khi xác thực Google.")
+                )
             }
         }
     }

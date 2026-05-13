@@ -4,22 +4,18 @@ import io.github.cdimascio.dotenv.dotenv
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
-import com.nhom2.auth.UserTable
-import com.nhom2.auth.PatientProfileTable
+import com.nhom2.models.*
 
 object DatabaseConfig {
     fun init() {
-        // Load .env safely — some .env files may contain duplicate keys which the dotenv library
-        // throws on. Fall back to System.getenv if dotenv fails.
+        // Load .env safely
         val dot = try {
             dotenv { ignoreIfMissing = true }
         } catch (t: Throwable) {
             null
         }
 
-        // If dotenv failed (e.g. malformed .env), try a simple fallback parser that tolerates
-        // duplicate keys by taking the last occurrence. This allows local .env files with
-        // duplicate lines to still be used during tests.
+        // Fallback parser for duplicate keys
         val fallbackMap: Map<String, String> = run {
             try {
                 val f = java.io.File(".env")
@@ -40,22 +36,55 @@ object DatabaseConfig {
 
         fun envGet(key: String): String? = dot?.get(key) ?: fallbackMap[key] ?: System.getenv(key)
 
-        Database.connect(
-            url = envGet("DATABASE_URL") ?: error("DATABASE_URL is not set"),
-            driver = "org.postgresql.Driver",
-            user = envGet("DATABASE_USER") ?: error("DATABASE_USER is not set"),
-            password = envGet("DATABASE_PASSWORD") ?: error("DATABASE_PASSWORD is not set")
-        )
-        println("Database connected successfully")
+        val dbUrl = envGet("DATABASE_URL") ?: error("DATABASE_URL is not set")
+        val dbUser = envGet("DATABASE_USER") ?: error("DATABASE_USER is not set")
+        val dbPassword = envGet("DATABASE_PASSWORD") ?: ""
 
-        // Create tables automatically in dev/test environments (idempotent)
-        try {
-            transaction {
-                SchemaUtils.create(UserTable, PatientProfileTable)
+        // Auto-detect driver based on URL
+        val driver = when {
+            dbUrl.contains("h2") -> "org.h2.Driver"
+            dbUrl.contains("postgresql") -> "org.postgresql.Driver"
+            else -> "org.postgresql.Driver"
+        }
+
+        Database.connect(
+            url = dbUrl,
+            driver = driver,
+            user = dbUser,
+            password = dbPassword
+        )
+
+        // Create tables for H2, skip for PostgreSQL/Supabase
+        if (dbUrl.contains("h2")) {
+            try {
+                transaction {
+                    SchemaUtils.create(
+                        Users,
+                        HealthRecords,
+                        Specialties,
+                        // Doctors, // DEPRECATED: Use SupabaseDoctors instead
+                        Services,
+                        Holidays,
+                        Shifts,
+                        WorkSchedules,
+                        TimeSlots,
+                        Appointments,
+                        LeaveRequests,
+                        Notifications
+                    )
+                }
+            } catch (t: Throwable) {
+                // Schema creation failed
             }
-            println("Database schema ensured (UserTable, PatientProfileTable)")
-        } catch (t: Throwable) {
-            println("Warning: could not create schema automatically: ${t.message}")
+        } else {
+            // Verify Supabase/PostgreSQL connection
+            try {
+                transaction {
+                    exec("SELECT 1") { }
+                }
+            } catch (t: Throwable) {
+                // Connection verification failed
+            }
         }
     }
 }

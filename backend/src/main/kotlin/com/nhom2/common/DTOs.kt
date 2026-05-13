@@ -1,0 +1,768 @@
+package com.nhom2.common
+
+import kotlinx.serialization.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
+import java.time.LocalDate
+import java.time.LocalTime
+
+// Serializers for Java Time types
+object InstantSerializer : KSerializer<java.time.Instant> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Instant", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: java.time.Instant) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): java.time.Instant = java.time.Instant.parse(decoder.decodeString())
+}
+
+object LocalDateSerializer : KSerializer<LocalDate> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LocalDate", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: LocalDate) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): LocalDate = LocalDate.parse(decoder.decodeString())
+}
+
+object LocalTimeSerializer : KSerializer<LocalTime> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LocalTime", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: LocalTime) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): LocalTime = LocalTime.parse(decoder.decodeString())
+}
+
+// ── Common Response DTOs ─────────────────────────
+@Serializable
+data class ApiResponse<T>(
+    val success: Boolean,
+    val data: T? = null,
+    val message: String? = null,
+    val error: String? = null
+)
+
+@Serializable
+data class ErrorResponse(
+    val success: Boolean = false,
+    val error: String,
+    val message: String
+)
+
+@Serializable
+data class PaginatedResponse<T>(
+    val items: List<T>,
+    val total: Int,
+    val page: Int,
+    val pageSize: Int,
+    val totalPages: Int
+)
+
+// ── User DTOs ────────────────────────────────────
+@Serializable
+data class UserDTO(
+    val id: String,
+    val email: String,
+    val fullName: String,
+    val phone: String?,
+    val role: String,
+    val isActive: Boolean,
+    val createdAt: String,
+    val updatedAt: String,
+    val doctorId: String? = null
+)
+
+@Serializable
+data class CreateUserRequest(
+    val email: String,
+    val password: String,
+    val fullName: String,
+    val phone: String?,
+    val role: String = "patient"
+)
+
+@Serializable
+data class UpdateUserRequest(
+    val fullName: String?,
+    val phone: String?,
+    val isActive: Boolean?
+)
+
+// ── Auth DTOs ────────────────────────────────────
+@Serializable
+data class LoginRequest(
+    val email: String,
+    val password: String
+)
+
+@Serializable
+data class LoginResponse(
+    val token: String,
+    val user: UserDTO
+)
+
+@Serializable
+data class RegisterRequest(
+    val email: String,
+    val password: String,
+    val fullName: String,
+    val phone: String?
+)
+
+// ── Health Record DTOs ───────────────────────────
+@Serializable
+data class HealthRecordDTO(
+    val id: String,
+    val userId: String,
+    val fullName: String,
+    val dateOfBirth: String,
+    val ethnicity: String?,
+    val gender: String,
+    val occupation: String?,
+    val phone: String,
+    val email: String,
+    val nationalId: String?,
+    val address: String,
+    val allergyNotes: String?,
+    val medicalHistory: String?,
+    val dentalStatus: String?,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class CreateHealthRecordRequest(
+    val fullName: String,
+    val dateOfBirth: String,
+    val ethnicity: String?,
+    val gender: String,
+    val occupation: String?,
+    val phone: String,
+    val email: String,
+    val nationalId: String?,
+    val address: String,
+    val allergyNotes: String?,
+    val medicalHistory: String?,
+    val dentalStatus: String?
+)
+
+@Serializable
+data class UpdateHealthRecordRequest(
+    val fullName: String?,
+    val dateOfBirth: String?,
+    val ethnicity: String?,
+    val gender: String?,
+    val occupation: String?,
+    val phone: String?,
+    val email: String?,
+    val nationalId: String?,
+    val address: String?,
+    val allergyNotes: String?,
+    val medicalHistory: String?,
+    val dentalStatus: String?
+)
+
+// ── Specialty DTOs ───────────────────────────────
+@Serializable
+data class SpecialtyDTO(
+    val id: String,
+    val name: String,
+    val description: String?,
+    val isActive: Boolean,
+    val doctorCount: Int = 0,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class CreateSpecialtyRequest(
+    val name: String,
+    val description: String?
+)
+
+@Serializable
+data class UpdateSpecialtyRequest(
+    val name: String? = null,
+    val description: String? = null,
+    val isActive: Boolean? = null
+)
+
+// ── Doctor DTOs ──────────────────────────────────
+@Serializable
+data class DoctorDTO(
+    val id: String,
+    val userId: String,
+    val user: UserDTO,
+    val specialty: SpecialtyDTO,
+    val qualifications: String?,
+    val bio: String?,
+    val avatar: String?,
+    val isActive: Boolean,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class DoctorSummaryDTO(
+    val id: String,
+    val fullName: String,
+    val specialtyName: String,
+    val avatar: String?,
+    val qualifications: String?
+)
+
+@Serializable
+data class CreateDoctorRequest(
+    val userId: String,
+    val specialtyId: String,
+    val qualifications: String?,
+    val bio: String?,
+    val avatar: String?
+)
+
+@Serializable
+data class UpdateDoctorRequest(
+    val specialtyId: String?,
+    val qualifications: String?,
+    val bio: String?,
+    val avatar: String?,
+    val isActive: Boolean?
+)
+
+// ── Service DTOs ─────────────────────────────────
+@Serializable
+data class ServiceDTO(
+    val id: String,
+    val name: String,
+    val description: String?,
+    val price: String, // returned as string for display
+    val duration: Int,
+    val category: String?,
+    val specialtyId: String?,
+    val isActive: Boolean,
+    val createdAt: String,
+    val updatedAt: String?
+)
+
+@Serializable
+data class CreateServiceRequest(
+    val name: String,
+    val description: String? = null,
+    val price: Int,
+    val duration: Int,
+    val category: String? = null,
+    val specialtyId: String? = null
+)
+
+@Serializable
+data class UpdateServiceRequest(
+    val name: String? = null,
+    val description: String? = null,
+    val price: Int? = null,
+    val duration: Int? = null,
+    val category: String? = null,
+    val specialtyId: String? = null,
+    val isActive: Boolean? = null
+)
+
+// ── Holiday DTOs ─────────────────────────────────
+@Serializable
+data class HolidayDTO(
+    val id: String,
+    val date: String,
+    val name: String,
+    val description: String?,
+    val createdAt: String
+)
+
+@Serializable
+data class CreateHolidayRequest(
+    val date: String,
+    val name: String,
+    val description: String?
+)
+
+// ── Shift DTOs ───────────────────────────────────
+@Serializable
+data class ShiftDTO(
+    val id: String,
+    val name: String,
+    val startTime: String,
+    val endTime: String,
+    val createdAt: String
+)
+
+@Serializable
+data class CreateShiftRequest(
+    val name: String,
+    val startTime: String,
+    val endTime: String
+)
+
+@Serializable
+data class UpdateShiftRequest(
+    val name: String?,
+    val startTime: String?,
+    val endTime: String?
+)
+
+// ── Work Schedule DTOs ───────────────────────────
+@Serializable
+data class WorkScheduleDTO(
+    val id: String,
+    val doctor: DoctorSummaryDTO,
+    val shift: ShiftDTO,
+    val date: String,
+    val slotDuration: Int,
+    val maxPatientPerSlot: Int,
+    val timeSlots: List<TimeSlotDTO>,
+    val createdAt: String
+)
+
+@Serializable
+data class CreateWorkScheduleRequest(
+    val doctorId: String,
+    val shiftId: String,
+    val date: String,
+    val slotDuration: Int = 30,
+    val maxPatientPerSlot: Int = 1
+)
+
+// ── Time Slot DTOs ───────────────────────────────
+@Serializable
+data class TimeSlotDTO(
+    val id: String,
+    val workScheduleId: String,
+    val startTime: String,
+    val endTime: String,
+    val maxPatientPerSlot: Int,
+    val currentBookings: Int,
+    val remainingCapacity: Int,
+    val isAvailable: Boolean,
+    val createdAt: String
+)
+
+// ── Appointment DTOs ─────────────────────────────
+@Serializable
+data class AppointmentDTO(
+    val id: String,
+    val patient: UserDTO,
+    val doctor: DoctorSummaryDTO,
+    val healthRecord: HealthRecordDTO,
+    val timeSlot: TimeSlotDTO,
+    val service: ServiceDTO?,
+    val appointmentDate: String,
+    val status: String,
+    val notes: String?,
+    val cancellationReason: String?,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class AppointmentSummaryDTO(
+    val id: String,
+    val patientName: String,
+    val doctorName: String,
+    val specialtyName: String,
+    val appointmentDate: String,
+    val startTime: String,
+    val endTime: String,
+    val status: String,
+    val serviceName: String?
+)
+
+@Serializable
+data class CreateAppointmentRequest(
+    val doctorId: String,
+    val timeSlotId: String? = null,
+    val serviceId: String, // Required now
+    val appointmentDate: String? = null,
+    val notes: String? = null
+)
+
+@Serializable
+data class UpdateAppointmentRequest(
+    val status: String?,
+    val notes: String?,
+    val cancellationReason: String?
+)
+
+// ── Leave Request DTOs ───────────────────────────
+@Serializable
+data class LeaveRequestDTO(
+    val id: String,
+    val doctor: DoctorSummaryDTO,
+    val startDate: String,
+    val endDate: String,
+    val reason: String,
+    val status: String,
+    val reviewedBy: UserDTO?,
+    val reviewedAt: String?,
+    val createdAt: String
+)
+
+@Serializable
+data class CreateLeaveRequestRequest(
+    val startDate: String,
+    val endDate: String,
+    val reason: String
+)
+
+@Serializable
+data class ReviewLeaveRequestRequest(
+    val status: String, // approved or rejected
+    val reviewNote: String?
+)
+
+// ── Notification DTOs ────────────────────────────
+@Serializable
+data class NotificationDTO(
+    val id: String,
+    val userId: String,
+    val title: String,
+    val message: String,
+    val type: String,
+    val isRead: Boolean,
+    val relatedId: String?,
+    val createdAt: String
+)
+
+@Serializable
+data class CreateNotificationRequest(
+    val userId: String,
+    val title: String,
+    val message: String,
+    val type: String,
+    val relatedId: String?
+)
+
+// ── Dashboard DTOs ───────────────────────────────
+@Serializable
+data class DashboardStatsDTO(
+    val totalAppointments: Int,
+    val totalPatients: Int,
+    val totalRevenue: String,
+    val appointmentsByStatus: Map<String, Int>,
+    val recentAppointments: List<AppointmentSummaryDTO>
+)
+
+// ── Patient DTOs ─────────────────────────────────
+@Serializable
+data class PatientDTO(
+    val id: String,
+    val name: String,
+    val email: String,
+    val phone: String?,
+    val isActive: Boolean,
+    val createdAt: String,
+    val dateOfBirth: String? = null,
+    val gender: String? = null,
+    val allergies: String? = null,
+    val address: String? = null,
+    val medicalHistory: String? = null
+)
+
+@Serializable
+data class PatientListResponse(
+    val patients: List<PatientDTO>,
+    val total: Int
+)
+
+// ── Doctor Schedule DTOs ─────────────────────────
+@Serializable
+data class DoctorScheduleResponse(
+    val id: String,
+    val doctorId: String,
+    val doctorName: String,
+    val specialty: String,
+    val workDate: String,
+    val slotStart: String,
+    val slotEnd: String,
+    val isBooked: Boolean,
+    val createdAt: String
+)
+
+// ── Filter/Search DTOs ───────────────────────────
+@Serializable
+data class DoctorFilterRequest(
+    val specialtyId: String?,
+    val weekday: String?,
+    val gender: String?,
+    val sessionTime: String?, // morning, afternoon, evening
+    val search: String?
+)
+
+@Serializable
+data class AppointmentFilterRequest(
+    val startDate: String?,
+    val endDate: String?,
+    val doctorId: String?,
+    val specialtyId: String?,
+    val status: String?,
+    val page: Int = 1,
+    val pageSize: Int = 20
+)
+
+// ── Doctor Dashboard DTOs ────────────────────────
+@Serializable
+data class UpdateDoctorProfileRequest(
+    val fullName: String? = null,
+    val specialty: String? = null,
+    val degree: String? = null,
+    val bio: String? = null,
+    val avatarUrl: String? = null
+)
+
+@Serializable
+data class CancelAppointmentRequest(
+    val cancellationReason: String
+)
+
+@Serializable
+data class RegisterWorkScheduleRequest(
+    val shiftId: String,
+    val date: String
+)
+
+@Serializable
+data class DoctorWorkScheduleDTO(
+    val id: String,
+    val doctorId: String,
+    val workDate: String,
+    val slotStart: String,
+    val slotEnd: String,
+    val isBooked: Boolean,
+    val createdAt: String
+)
+
+@Serializable
+data class PatientHealthRecordDTO(
+    val patient: UserDTO,
+    val profile: PatientProfileDTO?,
+    val appointments: List<AppointmentSummaryDTO>
+)
+
+@Serializable
+data class PatientProfileDTO(
+    val id: String,
+    val userId: String,
+    val dateOfBirth: String?,
+    val gender: String?,
+    val allergyNotes: String?,
+    val medicalHistory: String?,
+    val updatedAt: String
+)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Phase 1: New DTOs for Refactored Schedule System
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Weekly Work Schedule DTOs ────────────────────────────────────────────────
+@Serializable
+data class WeeklyScheduleDTO(
+    val id: String,
+    val doctorId: String,
+    val dayOfWeek: Int, // 1=Mon, 7=Sun
+    val session: String, // 'morning' or 'afternoon'
+    val startTime: String, // HH:mm format
+    val endTime: String, // HH:mm format
+    val isActive: Boolean,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class CreateWeeklyScheduleRequest(
+    val dayOfWeek: Int,
+    val session: String,
+    val startTime: String? = null, // Optional, defaults based on session
+    val endTime: String? = null // Optional, defaults based on session
+)
+
+@Serializable
+data class UpdateWeeklyScheduleRequest(
+    val isActive: Boolean? = null,
+    val startTime: String? = null,
+    val endTime: String? = null
+)
+
+// ── Schedule Exception DTOs ──────────────────────────────────────────────────
+@Serializable
+data class ScheduleExceptionDTO(
+    val id: String,
+    val doctorId: String,
+    val exceptionDate: String, // YYYY-MM-DD
+    val exceptionType: String, // 'off' or 'override'
+    val session: String?, // null = entire day
+    val overrideStartTime: String?, // HH:mm format
+    val overrideEndTime: String?, // HH:mm format
+    val reason: String?,
+    val createdAt: String
+)
+
+@Serializable
+data class CreateExceptionRequest(
+    val exceptionDate: String,
+    val exceptionType: String,
+    val session: String? = null,
+    val overrideStartTime: String? = null,
+    val overrideEndTime: String? = null,
+    val reason: String? = null
+)
+
+// ── Schedule Change Request DTOs ─────────────────────────────────────────────
+@Serializable
+data class ScheduleChangeRequestDTO(
+    val id: String,
+    val doctorId: String,
+    val doctorName: String,
+    val requestType: String, // 'add', 'remove', 'modify'
+    val oldScheduleData: ScheduleDataDTO?,
+    val newScheduleData: ScheduleDataDTO?,
+    val status: String, // 'pending', 'approved', 'rejected'
+    val rejectionReason: String?,
+    val reviewedBy: String?,
+    val reviewedByName: String?,
+    val reviewedAt: String?,
+    val createdAt: String
+)
+
+@Serializable
+data class ScheduleDataDTO(
+    val dayOfWeek: Int,
+    val session: String,
+    val startTime: String,
+    val endTime: String
+)
+
+@Serializable
+data class CreateScheduleChangeRequest(
+    val requestType: String,
+    val oldScheduleData: ScheduleDataDTO? = null,
+    val newScheduleData: ScheduleDataDTO? = null
+)
+
+@Serializable
+data class ReviewScheduleChangeRequest(
+    val status: String, // 'approved' or 'rejected'
+    val rejectionReason: String? = null
+)
+
+// ── Available Slot DTOs ──────────────────────────────────────────────────────
+@Serializable
+data class AvailableSlotDTO(
+    val start: String, // ISO 8601 timestamp
+    val end: String // ISO 8601 timestamp
+)
+
+@Serializable
+data class AvailableSlotsResponse(
+    val date: String,
+    val doctorId: String,
+    val slots: List<AvailableSlotDTO>
+)
+
+// ── Appointment V2 DTOs (Time-based booking) ─────────────────────────────────
+@Serializable
+data class CreateAppointmentRequestV2(
+    val doctorId: String,
+    val startTime: String, // ISO 8601 timestamp
+    val endTime: String, // ISO 8601 timestamp
+    val serviceId: String,
+    val notes: String? = null,
+    val parentAppointmentId: String? = null, // For follow-ups
+    val chatSessionId: String? = null // Link to chat session for doctor review
+)
+
+@Serializable
+data class AppointmentDTOV2(
+    val id: String,
+    val patient: UserDTO,
+    val doctor: DoctorSummaryDTO,
+    val healthRecord: HealthRecordDTO,
+    val service: ServiceDTO?,
+    val startTime: String?, // ISO 8601 timestamp
+    val endTime: String?, // ISO 8601 timestamp
+    val appointmentDate: String, // YYYY-MM-DD (for backward compatibility)
+    val status: String,
+    val notes: String?,
+    val cancellationReason: String?,
+    val parentAppointmentId: String?,
+    val isFollowUp: Boolean,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class CreateFollowUpRequest(
+    val parentAppointmentId: String,
+    val startTime: String, // ISO 8601 timestamp
+    val endTime: String, // ISO 8601 timestamp
+    val notes: String? = null
+)
+
+// ── Medication DTOs ──────────────────────────────
+@Serializable
+data class MedicationDTO(
+    val id: String,
+    val name: String,
+    val unit: String,
+    val description: String?,
+    val defaultDosage: String?,
+    val isActive: Boolean,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class CreateMedicationRequest(
+    val name: String,
+    val unit: String,
+    val description: String? = null,
+    val defaultDosage: String? = null
+)
+
+@Serializable
+data class UpdateMedicationRequest(
+    val name: String? = null,
+    val unit: String? = null,
+    val description: String? = null,
+    val defaultDosage: String? = null,
+    val isActive: Boolean? = null
+)
+
+// ── Prescription DTOs ────────────────────────────
+@Serializable
+data class PrescriptionItemDTO(
+    val id: String,
+    val medicationId: String,
+    val medicationName: String,
+    val unit: String,
+    val quantity: Int,
+    val dosageInstruction: String?
+)
+
+@Serializable
+data class PrescriptionDTO(
+    val id: String,
+    val appointmentId: String?,
+    val patientId: String,
+    val patientName: String,
+    val doctorId: String,
+    val doctorName: String,
+    val diagnosis: String?,
+    val advice: String?,
+    val followUpDate: String?,
+    val items: List<PrescriptionItemDTO>,
+    val createdAt: String
+)
+
+@Serializable
+data class PrescriptionItemRequest(
+    val medicationId: String,
+    val quantity: Int,
+    val dosageInstruction: String?
+)
+
+@Serializable
+data class CreatePrescriptionRequest(
+    val appointmentId: String? = null,
+    val patientId: String,
+    val diagnosis: String? = null,
+    val advice: String? = null,
+    val followUpDate: String? = null,
+    val items: List<PrescriptionItemRequest>
+)

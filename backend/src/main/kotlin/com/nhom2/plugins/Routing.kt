@@ -1,34 +1,57 @@
 package com.nhom2.plugins
 
 import com.nhom2.auth.authRoutes
-import com.nhom2.doctor.DoctorService
-import com.nhom2.doctor.adminDoctorRoutes
-import com.nhom2.doctor.doctorRoutes
-import com.nhom2.patient.profileRoutes
-import com.nhom2.service.ServiceService
-import com.nhom2.service.adminServiceRoutes
-import com.nhom2.service.serviceRoutes
+import com.nhom2.healthrecord.healthRecordRoutes
+import com.nhom2.specialty.specialtyRoutes
+import com.nhom2.doctors.doctorRoutes
+import com.nhom2.doctor.doctorDashboardRoutes
+import com.nhom2.admin.adminApiRoutes
+import com.nhom2.services.serviceRoutes
+import com.nhom2.appointment.appointmentRoutes
+import com.nhom2.schedule.scheduleRoutes
+import com.nhom2.notification.notificationRoutes
+import com.nhom2.dashboard.dashboardRoutes
+import com.nhom2.patient.patientRoutes
+import com.nhom2.chat.chatRoutes
+// Phase 1: New schedule system routes
+import com.nhom2.weekschedule.weeklyScheduleRoutes
+import com.nhom2.schedulechange.scheduleChangeRoutes
+import com.nhom2.exception.scheduleExceptionRoutes
+import com.nhom2.prescription.prescriptionRoutes
+import com.nhom2.config.DatabaseConfig
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
 fun Application.configureRouting() {
-    val doctorService = DoctorService()
-    val serviceService = ServiceService()
     routing {
-        get("/health") {
-            call.respondText("Dental Backend is running - Phase 1 OK")
+        get("/") {
+            call.respondText("Dental Appointment System API is running!")
         }
 
-        authRoutes()
-        profileRoutes()
+        get("/health") {
+            call.respondText("OK")
+        }
 
-        // Public routes (bệnh nhân xem)
-        doctorRoutes(doctorService)
-        serviceRoutes(serviceService)
-
-        // Admin routes (CRUD)
-        adminDoctorRoutes(doctorService)
-        adminServiceRoutes(serviceService)
+        // Register all routes under /api prefix
+        route("/api") {
+            prescriptionRoutes()
+            authRoutes()
+            patientRoutes()
+            healthRecordRoutes()
+            specialtyRoutes()
+            doctorRoutes()
+            doctorDashboardRoutes()
+            adminApiRoutes()
+            serviceRoutes()
+            appointmentRoutes()
+            scheduleRoutes()
+            notificationRoutes()
+            dashboardRoutes()
+            chatRoutes()
+            weeklyScheduleRoutes()
+            scheduleChangeRoutes()
+            scheduleExceptionRoutes()
+        }
     }
 }

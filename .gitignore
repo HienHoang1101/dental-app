@@ -5,6 +5,7 @@
 # ── Kotlin / Gradle ────────────────────────
 backend/.gradle/
 backend/build/
+backend/bin/
 backend/.idea/
 backend/.kotlin/
 backend/out/

@@ -1,204 +1,151 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import AdminLayout from "@/components/layout/AdminLayout";
+import { adminApi } from "@/lib/adminApi";
+import { HealthRecord } from "@/types";
 
-const MOCK_PATIENTS = [
-  {
-    id: '1',
-    name: 'Nguyễn Văn A',
-    email: 'patient@test.com',
-    phone: '0123456789',
-    dateOfBirth: '1990-01-15',
-    gender: 'male',
-    address: '123 Đường ABC, Quận 1, TP.HCM',
-    totalAppointments: 5,
-    lastVisit: '2026-05-02',
-    status: 'active',
-  },
-  {
-    id: '2',
-    name: 'Trần Thị B',
-    email: 'tran.b@email.com',
-    phone: '0987654321',
-    dateOfBirth: '1985-06-20',
-    gender: 'female',
-    address: '456 Đường XYZ, Quận 3, TP.HCM',
-    totalAppointments: 3,
-    lastVisit: '2026-04-28',
-    status: 'active',
-  },
-  {
-    id: '3',
-    name: 'Lê Văn C',
-    email: 'le.c@email.com',
-    phone: '0369852147',
-    dateOfBirth: '1995-03-10',
-    gender: 'male',
-    address: '789 Đường DEF, Quận 5, TP.HCM',
-    totalAppointments: 8,
-    lastVisit: '2026-05-01',
-    status: 'active',
-  },
-  {
-    id: '4',
-    name: 'Phạm Thị D',
-    email: 'pham.d@email.com',
-    phone: '0258963147',
-    dateOfBirth: '1988-12-05',
-    gender: 'female',
-    address: '321 Đường GHI, Quận 7, TP.HCM',
-    totalAppointments: 2,
-    lastVisit: '2026-04-15',
-    status: 'inactive',
-  },
-]
+export default function PatientsPage() {
+  const router = useRouter();
+  const [patients, setPatients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
 
-export default function AdminPatientsPage() {
-  const [searchTerm, setSearchTerm] = useState('')
+  useEffect(() => {
+    loadPatients();
+  }, []);
 
-  const filteredPatients = MOCK_PATIENTS.filter(
+  const loadPatients = async () => {
+    try {
+      const response = await adminApi.getPatients();
+      setPatients(response.patients || []);
+    } catch (error) {
+      console.error("Failed to load patients:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredPatients = patients.filter(
     (patient) =>
-      patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.phone.includes(searchTerm)
-  )
+      patient.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.email?.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Quản lý bệnh nhân</h1>
-        <p className="text-muted-foreground mt-2">
-          Xem và quản lý thông tin bệnh nhân
-        </p>
-      </div>
+    <AdminLayout>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">
+            Quản lý bệnh nhân
+          </h1>
+        </div>
 
-      {/* Search */}
-      <div className="flex gap-4">
-        <Input
-          placeholder="Tìm kiếm theo tên, email, số điện thoại..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-md"
-        />
-        <Button>🔍 Tìm kiếm</Button>
-      </div>
+        {/* Search */}
+        <div className="bg-white p-4 rounded-lg shadow">
+          <input
+            type="text"
+            placeholder="Tìm kiếm theo tên hoặc email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
 
-      {/* Statistics */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Tổng bệnh nhân</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{MOCK_PATIENTS.length}</div>
-          </CardContent>
-        </Card>
+        {/* Patients Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tên bệnh nhân
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Email
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Số điện thoại
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ngày sinh
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Trạng thái
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Thao tác
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredPatients.map((patient) => (
+                <tr key={patient.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {patient.name}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">{patient.email}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">
+                      {patient.phone || "-"}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">
+                      {patient.dateOfBirth
+                        ? new Date(patient.dateOfBirth).toLocaleDateString(
+                            "vi-VN",
+                          )
+                        : "-"}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        patient.isActive
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {patient.isActive ? "Hoạt động" : "Không hoạt động"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() =>
+                        router.push(`/admin/patients/${patient.id}`)
+                      }
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      Chi tiết
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Đang hoạt động</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {MOCK_PATIENTS.filter((p) => p.status === 'active').length}
+          {filteredPatients.length === 0 && (
+            <div className="text-center py-12 text-gray-500">
+              Không tìm thấy bệnh nhân nào
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Bệnh nhân mới</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">2</div>
-            <p className="text-xs text-muted-foreground">Tháng này</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Tổng lượt khám</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {MOCK_PATIENTS.reduce((sum, p) => sum + p.totalAppointments, 0)}
-            </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
-
-      {/* Patients List */}
-      <div className="space-y-4">
-        {filteredPatients.map((patient) => (
-          <Card key={patient.id}>
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle>{patient.name}</CardTitle>
-                  <CardDescription>Mã BN: #{patient.id}</CardDescription>
-                </div>
-                <span
-                  className={`px-3 py-1 rounded-full text-sm ${
-                    patient.status === 'active'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {patient.status === 'active' ? 'Hoạt động' : 'Không hoạt động'}
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{patient.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Số điện thoại</p>
-                    <p className="font-medium">{patient.phone}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Ngày sinh</p>
-                    <p className="font-medium">{patient.dateOfBirth}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Địa chỉ</p>
-                    <p className="font-medium">{patient.address}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Tổng lượt khám</p>
-                    <p className="font-medium">{patient.totalAppointments} lần</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Khám gần nhất</p>
-                    <p className="font-medium">{patient.lastVisit}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                <Button variant="outline" className="flex-1">
-                  📋 Xem hồ sơ
-                </Button>
-                <Button variant="outline" className="flex-1">
-                  📅 Lịch sử khám
-                </Button>
-                <Button variant="outline" className="flex-1">
-                  ✏️ Chỉnh sửa
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  )
+    </AdminLayout>
+  );
 }

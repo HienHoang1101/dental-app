@@ -1,28 +1,38 @@
-export default function Home() {
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/stores/authStore";
+
+export default function HomePage() {
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuthStore();
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      router.replace("/login");
+      return;
+    }
+
+    // Redirect based on role
+    switch (user.role.toLowerCase()) {
+      case "patient":
+        router.replace("/patient/dashboard");
+        break;
+      case "doctor":
+        router.replace("/doctor/dashboard");
+        break;
+      case "admin":
+        router.replace("/admin/dashboard");
+        break;
+      default:
+        router.replace("/login");
+    }
+  }, [user, isAuthenticated, router]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">
-          🦷 Dental Clinic AI
-        </h1>
-        <p className="text-xl text-muted-foreground mb-8">
-          Hệ thống phòng khám nha khoa tích hợp AI
-        </p>
-        <div className="flex gap-4 justify-center">
-          <a
-            href="/auth/login"
-            className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition"
-          >
-            Đăng nhập
-          </a>
-          <a
-            href="/auth/register"
-            className="px-6 py-3 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition"
-          >
-            Đăng ký
-          </a>
-        </div>
-      </div>
-    </main>
-  )
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    </div>
+  );
 }

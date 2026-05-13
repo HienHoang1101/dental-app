@@ -12,6 +12,7 @@ import json
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from underthesea import word_tokenize
 
 # ── Cấu hình từ .env ────────────────────────────────────────
 MODEL_BACKEND    = os.getenv("MODEL_BACKEND", "svm")   # "svm" | "phobert"
@@ -60,16 +61,31 @@ _embed_model = SentenceTransformer("bkai-foundation-models/vietnamese-bi-encoder
 print("✅ Embedding model loaded")
 
 # ── Kết nối Pinecone ────────────────────────────────────────
-from pinecone import Pinecone
-_pc    = Pinecone(api_key=PINECONE_API_KEY)
-_index = _pc.Index(PINECONE_INDEX)
-print(f"✅ Pinecone connected: {PINECONE_INDEX}")
+_pc    = None
+_index = None
+
+
+def get_pinecone_index():
+    global _pc, _index
+    if _index is None:
+        from pinecone import Pinecone
+        _pc = Pinecone(api_key=PINECONE_API_KEY)
+        _index = _pc.Index(PINECONE_INDEX)
+        print(f"✅ Pinecone connected: {PINECONE_INDEX}")
+    return _index
 
 # ── Gemini client ────────────────────────────────────────────
-import google.generativeai as genai
-genai.configure(api_key=GEMINI_API_KEY)
-_gemini = genai.GenerativeModel("gemini-2.5-flash")
-print("✅ Gemini configured")
+_gemini = None
+
+
+def get_gemini_model():
+    global _gemini
+    if _gemini is None:
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        _gemini = genai.GenerativeModel("gemini-2.5-flash-lite")
+        print("✅ Gemini configured")
+    return _gemini
 
 
 # ══════════════════════════════════════════════════════════
@@ -77,17 +93,15 @@ print("✅ Gemini configured")
 # ══════════════════════════════════════════════════════════
 
 def preprocess(text: str) -> str:
-    return text.strip().lower()
+    return word_tokenize(text.strip().lower(), format="text")
 
 
 def classify_svm(text: str) -> dict:
     """SVM classify → trả về label + confidence + top3."""
-    processed  = preprocess(text)
-    label      = _svm_pipeline.predict([processed])[0]
-    scores     = _svm_pipeline.decision_function([processed])[0]
-    scores_exp = np.exp(scores - np.max(scores))
-    probs      = scores_exp / scores_exp.sum()
-    classes    = _svm_pipeline.classes_
+    processed = preprocess(text)
+    label     = _svm_pipeline.predict([processed])[0]
+    probs     = _svm_pipeline.predict_proba([processed])[0]
+    classes   = _svm_pipeline.classes_
 
     top_labels = sorted(
         [{"label": c, "confidence": round(float(p), 4)}
@@ -145,8 +159,9 @@ def retrieve_context(question: str, _label: str, top_k: int = 3) -> list[dict]:
     ).tolist()
 
     all_matches = []
+    index = get_pinecone_index()
     for ns in PINECONE_NAMESPACES:
-        results = _index.query(
+        results = index.query(
             vector=vector,
             top_k=2,
             include_metadata=True,
@@ -213,8 +228,14 @@ Câu trả lời:"""
 
 def generate_answer(prompt: str) -> str:
     """Gọi Gemini API để sinh câu trả lời."""
+    # Allow a mock mode for offline/testing (set MOCK_GEMINI=1 in .env or env)
+    if os.getenv("MOCK_GEMINI", "") == "1":
+        # Return a short deterministic mock answer based on the prompt's first line
+        first_line = prompt.splitlines()[0][:200]
+        return f"[MOCK ANSWER] Dựa trên thông tin: {first_line}... (mock)"
+
     try:
-        response = _gemini.generate_content(
+        response = get_gemini_model().generate_content(
             prompt,
             generation_config={
                 "max_output_tokens": 1024,
@@ -272,6 +293,16 @@ class CompareResponse(BaseModel):
     svm: ClassifyResponse
     phobert: ClassifyResponse
     agreement: bool   # True nếu 2 model cùng dự đoán label
+
+class SummarizeRequest(BaseModel):
+    messages: list[str]  # Danh sách tin nhắn của user
+    ml_label: str        # Label chính từ classification
+
+class SummarizeResponse(BaseModel):
+    summary: str              # Tóm tắt ngắn gọn
+    key_symptoms: list[str]   # Các triệu chứng chính
+    primary_label: str        # Label chính
+    message_count: int        # Số tin nhắn
 
 
 # ── Endpoints ───────────────────────────────────────────────
@@ -377,6 +408,111 @@ Trả lời câu hỏi sau bằng tiếng Việt, ngắn gọn:
     )
 
 
+@app.post("/summarize", response_model=SummarizeResponse)
+def summarize_endpoint(request: SummarizeRequest):
+    """
+    Tạo summary từ chat history.
+    Backend Kotlin gọi endpoint này khi user đặt lịch để tạo tóm tắt cho bác sĩ.
+    """
+    if not request.messages:
+        raise HTTPException(400, "messages không được để trống")
+    
+    # Label mapping cho summary
+    label_names = {
+        "sau_rang":  "sâu răng",
+        "viem_nuou": "viêm nướu/nha chu",
+        "e_buot":    "ê buốt răng",
+        "rang_khon": "răng khôn",
+        "chinh_nha": "chỉnh nha/niềng răng",
+        "tham_my":   "thẩm mỹ răng",
+        "mat_rang":  "mất răng/phục hình",
+        "khac":      "vấn đề nha khoa tổng quát"
+    }
+    
+    label_display = label_names.get(request.ml_label, request.ml_label)
+    
+    # Ghép các tin nhắn thành context
+    messages_text = "\n".join([f"- {msg}" for msg in request.messages])
+    
+    # Tạo prompt cho Gemini
+    prompt = f"""Bạn là trợ lý y tế chuyên nghiệp. Hãy tóm tắt các triệu chứng của bệnh nhân từ cuộc trò chuyện sau.
+
+Chủ đề chính: {label_display}
+
+Các tin nhắn của bệnh nhân:
+{messages_text}
+
+Yêu cầu:
+1. Tóm tắt ngắn gọn trong 2-3 câu về triệu chứng chính
+2. Liệt kê các triệu chứng cụ thể (mỗi triệu chứng 1 dòng, bắt đầu bằng dấu -)
+3. Dùng ngôn ngữ y khoa nhưng dễ hiểu
+4. Không đưa ra chẩn đoán hay đề xuất điều trị
+
+Format trả về:
+TÓM TẮT: [2-3 câu tóm tắt]
+
+TRIỆU CHỨNG:
+- [triệu chứng 1]
+- [triệu chứng 2]
+..."""
+
+    try:
+        response = get_gemini_model().generate_content(
+            prompt,
+            generation_config={
+                "max_output_tokens": 512,
+                "temperature": 0.2,  # Rất thấp để summary nhất quán
+                "top_p": 0.8
+            }
+        )
+        
+        result_text = response.text.strip()
+        
+        # Parse response để tách summary và symptoms
+        lines = result_text.split('\n')
+        summary = ""
+        symptoms = []
+        
+        in_symptoms_section = False
+        for line in lines:
+            line = line.strip()
+            if line.startswith("TÓM TẮT:"):
+                summary = line.replace("TÓM TẮT:", "").strip()
+            elif not line.startswith("TÓM TẮT:") and not line.startswith("TRIỆU CHỨNG:") and not line.startswith("-") and summary == "":
+                # Dòng đầu tiên không có prefix
+                summary = line
+            elif line.startswith("TRIỆU CHỨNG:"):
+                in_symptoms_section = True
+            elif in_symptoms_section and line.startswith("-"):
+                symptom = line.lstrip("- ").strip()
+                if symptom:
+                    symptoms.append(symptom)
+        
+        # Fallback nếu không parse được
+        if not summary:
+            summary = result_text.split('\n')[0][:200]
+        
+        if not symptoms:
+            # Extract từ messages nếu Gemini không trả về đúng format
+            symptoms = [msg[:100] for msg in request.messages[:3]]
+        
+        return SummarizeResponse(
+            summary=summary,
+            key_symptoms=symptoms,
+            primary_label=request.ml_label,
+            message_count=len(request.messages)
+        )
+        
+    except Exception as e:
+        # Fallback: tạo summary đơn giản nếu Gemini fail
+        return SummarizeResponse(
+            summary=f"Bệnh nhân có triệu chứng liên quan đến {label_display}. Đã trao đổi {len(request.messages)} tin nhắn.",
+            key_symptoms=request.messages[:3],  # Lấy 3 tin nhắn đầu
+            primary_label=request.ml_label,
+            message_count=len(request.messages)
+        )
+
+
 @app.post("/embed")
 def embed_endpoint(request: EmbedRequest):
     """
@@ -399,7 +535,7 @@ def embed_endpoint(request: EmbedRequest):
             tmp_path = tmp.name
 
         # Chạy pipeline
-        result = process_pdf(tmp_path, _index)
+        result = process_pdf(tmp_path, get_pinecone_index())
 
         # Xóa file tạm
         os.unlink(tmp_path)
@@ -408,3 +544,5 @@ def embed_endpoint(request: EmbedRequest):
 
     except Exception as e:
         raise HTTPException(500, f"Lỗi xử lý PDF: {str(e)}")
+
+# Trigger reload

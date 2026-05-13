@@ -1,11 +1,12 @@
 [versions]
-exposed = "0.61.0"
+exposed = "0.44.1"
 h2 = "2.3.232"
 koin = "4.1.2-Beta1"
 kotlin = "2.3.0"
 ktor = "3.4.2"
 logback = "1.4.14"
 postgres = "42.7.10"
+google-auth = "1.23.0"
 
 [libraries]
 koin-ktor = { module = "io.insert-koin:koin-ktor", version.ref = "koin" }
@@ -27,6 +28,7 @@ logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "lo
 ktor-server-config-yaml = { module = "io.ktor:ktor-server-config-yaml", version.ref = "ktor" }
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
+google-auth-library = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "google-auth" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
