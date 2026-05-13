@@ -4,12 +4,16 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { adminApi } from "@/lib/adminApi";
-import { Appointment } from "@/types";
+import { Appointment, Prescription } from "@/types";
+import { FileText } from "lucide-react";
+import PrescriptionModal from "@/components/prescription/PrescriptionModal";
 
 export default function AppointmentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [appointment, setAppointment] = useState<Appointment | null>(null);
+  const [prescription, setPrescription] = useState<Prescription | null>(null);
+  const [showPrescription, setShowPrescription] = useState(false);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
@@ -19,8 +23,9 @@ export default function AppointmentDetailPage() {
 
   const loadAppointment = async () => {
     try {
+      const id = params.id as string;
       const response = await fetch(
-        `http://localhost:8080/api/admin/appointments/${params.id}`,
+        `http://localhost:8080/api/admin/appointments/${id}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -29,6 +34,14 @@ export default function AppointmentDetailPage() {
       );
       const data = await response.json();
       setAppointment(data.data);
+
+      // Fetch prescription if exists
+      try {
+        const pres = await adminApi.getPrescriptionByAppointment(id);
+        setPrescription(pres);
+      } catch (e) {
+        // Prescription might not exist, that's fine
+      }
     } catch (error) {
       console.error("Failed to load appointment:", error);
     } finally {
@@ -254,6 +267,29 @@ export default function AppointmentDetailPage() {
           </div>
         </div>
 
+        {/* Prescription Info */}
+        {prescription && (
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-orange-100 rounded-lg">
+                  <FileText className="w-6 h-6 text-orange-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Đơn thuốc của bác sĩ</h2>
+                  <p className="text-sm text-gray-500">Đã được kê vào ngày {new Date(prescription.createdAt).toLocaleDateString("vi-VN")}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPrescription(true)}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                Xem chi tiết & In
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Notes */}
         {appointment.notes && (
           <div className="bg-white rounded-lg shadow p-6">
@@ -297,6 +333,14 @@ export default function AppointmentDetailPage() {
           </div>
         </div>
       </div>
+
+      {showPrescription && appointment && (
+        <PrescriptionModal
+          appointment={appointment}
+          onClose={() => setShowPrescription(false)}
+          onSuccess={() => loadAppointment()}
+        />
+      )}
     </AdminLayout>
   );
 }

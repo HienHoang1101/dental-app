@@ -86,7 +86,7 @@ object AppointmentService {
                 }
             }
             
-            val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("UTC"))
+            val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("Asia/Ho_Chi_Minh"))
             
             // Validate appointment date (not a holiday)
             val isHoliday = Holidays.select { Holidays.date eq appointmentDate }.count() > 0
@@ -199,7 +199,7 @@ object AppointmentService {
                 return@transaction Result.failure(Exception("Time slot overlaps with an existing appointment"))
             }
             
-            val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("UTC"))
+            val appointmentDate = LocalDate.ofInstant(startTime, ZoneId.of("Asia/Ho_Chi_Minh"))
             val healthRecordId = parent[Appointments.healthRecordId]
             
             // Auto-complete parent

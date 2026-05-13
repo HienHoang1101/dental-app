@@ -17,6 +17,7 @@ import com.nhom2.chat.chatRoutes
 import com.nhom2.weekschedule.weeklyScheduleRoutes
 import com.nhom2.schedulechange.scheduleChangeRoutes
 import com.nhom2.exception.scheduleExceptionRoutes
+import com.nhom2.prescription.prescriptionRoutes
 import com.nhom2.config.DatabaseConfig
 import io.ktor.server.application.*
 import io.ktor.server.response.*
@@ -52,6 +53,7 @@ fun Application.configureRouting() {
             weeklyScheduleRoutes()
             scheduleChangeRoutes()
             scheduleExceptionRoutes()
+            prescriptionRoutes()
         }
     }
 }

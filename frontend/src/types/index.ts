@@ -243,3 +243,52 @@ export interface LeaveRequest {
   reviewedAt?: string;
   createdAt: string;
 }
+
+// Medication types
+export interface Medication {
+  id: string;
+  name: string;
+  unit: string;
+  description?: string;
+  defaultDosage?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Prescription types
+export interface PrescriptionItem {
+  id: string;
+  medicationId: string;
+  medicationName: string;
+  unit: string;
+  quantity: number;
+  dosageInstruction?: string;
+}
+
+export interface Prescription {
+  id: string;
+  appointmentId?: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  diagnosis?: string;
+  advice?: string;
+  followUpDate?: string;
+  items: PrescriptionItem[];
+  createdAt: string;
+}
+
+export interface CreatePrescriptionRequest {
+  appointmentId?: string;
+  patientId: string;
+  diagnosis?: string;
+  advice?: string;
+  followUpDate?: string;
+  items: {
+    medicationId: string;
+    quantity: number;
+    dosageInstruction?: string;
+  }[];
+}

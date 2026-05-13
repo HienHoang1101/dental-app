@@ -693,3 +693,76 @@ data class CreateFollowUpRequest(
     val endTime: String, // ISO 8601 timestamp
     val notes: String? = null
 )
+
+// ── Medication DTOs ──────────────────────────────
+@Serializable
+data class MedicationDTO(
+    val id: String,
+    val name: String,
+    val unit: String,
+    val description: String?,
+    val defaultDosage: String?,
+    val isActive: Boolean,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class CreateMedicationRequest(
+    val name: String,
+    val unit: String,
+    val description: String? = null,
+    val defaultDosage: String? = null
+)
+
+@Serializable
+data class UpdateMedicationRequest(
+    val name: String? = null,
+    val unit: String? = null,
+    val description: String? = null,
+    val defaultDosage: String? = null,
+    val isActive: Boolean? = null
+)
+
+// ── Prescription DTOs ────────────────────────────
+@Serializable
+data class PrescriptionItemDTO(
+    val id: String,
+    val medicationId: String,
+    val medicationName: String,
+    val unit: String,
+    val quantity: Int,
+    val dosageInstruction: String?
+)
+
+@Serializable
+data class PrescriptionDTO(
+    val id: String,
+    val appointmentId: String?,
+    val patientId: String,
+    val patientName: String,
+    val doctorId: String,
+    val doctorName: String,
+    val diagnosis: String?,
+    val advice: String?,
+    val followUpDate: String?,
+    val items: List<PrescriptionItemDTO>,
+    val createdAt: String
+)
+
+@Serializable
+data class PrescriptionItemRequest(
+    val medicationId: String,
+    val quantity: Int,
+    val dosageInstruction: String?
+)
+
+@Serializable
+data class CreatePrescriptionRequest(
+    val appointmentId: String? = null,
+    val patientId: String,
+    val diagnosis: String? = null,
+    val advice: String? = null,
+    val followUpDate: String? = null,
+    val items: List<PrescriptionItemRequest>
+)

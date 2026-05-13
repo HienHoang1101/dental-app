@@ -13,6 +13,8 @@ import {
   Bell,
   ClipboardList,
   Clock,
+  Pill,
+  FileText,
 } from "lucide-react";
 import Header from "./Header";
 
@@ -29,6 +31,8 @@ export default function AdminLayout({
     { name: "Bệnh nhân", href: "/admin/patients", icon: Users },
     { name: "Bác sĩ", href: "/admin/doctors", icon: UserCog },
     { name: "Lịch hẹn", href: "/admin/appointments", icon: ClipboardList },
+    { name: "Đơn thuốc", href: "/admin/prescriptions", icon: FileText },
+    { name: "Thuốc", href: "/admin/medications", icon: Pill },
     { name: "Dịch vụ", href: "/admin/services", icon: Briefcase },
     { name: "Chuyên khoa", href: "/admin/specialties", icon: Stethoscope },
     { name: "Lịch làm việc", href: "/admin/schedules", icon: Calendar },

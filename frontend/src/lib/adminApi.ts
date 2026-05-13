@@ -11,6 +11,8 @@ import {
   Shift,
   Holiday,
   DashboardStats,
+  Medication,
+  Prescription,
 } from "@/types";
 
 export const adminApi = {
@@ -444,5 +446,65 @@ export const adminApi = {
 
   deleteScheduleException: async (id: string): Promise<void> => {
     await api.delete(`/admin/schedule-exceptions/${id}`);
+  },
+
+  // Medications
+  getMedications: async (activeOnly: boolean = false): Promise<Medication[]> => {
+    const response = await api.get<ApiResponse<Medication[]>>("/medications", {
+      params: { activeOnly },
+    });
+    return response.data.data || [];
+  },
+
+  createMedication: async (data: {
+    name: string;
+    unit: string;
+    description?: string;
+    defaultDosage?: string;
+  }): Promise<Medication> => {
+    const response = await api.post<ApiResponse<Medication>>(
+      "/medications",
+      data,
+    );
+    return response.data.data!;
+  },
+
+  updateMedication: async (
+    id: string,
+    data: Partial<Medication>,
+  ): Promise<Medication> => {
+    const response = await api.put<ApiResponse<Medication>>(
+      `/medications/${id}`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  deleteMedication: async (id: string): Promise<void> => {
+    await api.delete(`/medications/${id}`);
+  },
+
+  // Prescriptions
+  getPrescriptions: async (): Promise<Prescription[]> => {
+    const response = await api.get<ApiResponse<Prescription[]>>(
+      "/prescriptions",
+    );
+    return response.data.data || [];
+  },
+
+  getPrescription: async (id: string): Promise<Prescription> => {
+    const response = await api.get<ApiResponse<Prescription>>(
+      `/prescriptions/${id}`,
+    );
+    return response.data.data!;
+  },
+
+  getPrescriptionByAppointment: async (
+    appointmentId: string,
+  ): Promise<Prescription> => {
+    const response = await api.get<ApiResponse<Prescription>>(
+      `/appointments/${appointmentId}/prescription`,
+    );
+    return response.data.data!;
   },
 };

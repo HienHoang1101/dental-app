@@ -7,6 +7,9 @@ import {
   Doctor,
   User,
   HealthRecord,
+  Medication,
+  Prescription,
+  CreatePrescriptionRequest,
 } from "@/types";
 
 export const doctorApi = {
@@ -215,5 +218,37 @@ export const doctorApi = {
 
   markAllAsRead: async (): Promise<void> => {
     await api.put("/notifications/read-all");
+  },
+
+  // Prescriptions
+  getMedications: async (activeOnly: boolean = true): Promise<Medication[]> => {
+    const response = await api.get<ApiResponse<Medication[]>>("/medications", {
+      params: { activeOnly },
+    });
+    return response.data.data || [];
+  },
+
+  createPrescription: async (
+    data: CreatePrescriptionRequest,
+  ): Promise<Prescription> => {
+    const response = await api.post<ApiResponse<Prescription>>(
+      "/prescriptions",
+      data,
+    );
+    return response.data.data!;
+  },
+
+  getPrescriptionByAppointment: async (
+    appointmentId: string,
+  ): Promise<Prescription | null> => {
+    try {
+      const response = await api.get<ApiResponse<Prescription>>(
+        `/appointments/${appointmentId}/prescription`,
+      );
+      return response.data.data!;
+    } catch (error: any) {
+      if (error.response?.status === 404) return null;
+      throw error;
+    }
   },
 };

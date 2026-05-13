@@ -10,6 +10,7 @@ export default function DoctorsPage() {
   const router = useRouter();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     loadDoctors();
@@ -25,6 +26,13 @@ export default function DoctorsPage() {
       setLoading(false);
     }
   };
+
+  const filteredDoctors = doctors.filter(
+    (doctor) =>
+      doctor.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doctor.specialty?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doctor.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
 
   if (loading) {
     return (
@@ -49,79 +57,117 @@ export default function DoctorsPage() {
           </button>
         </div>
 
-        {/* Doctors Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {doctors.map((doctor) => (
-            <div
-              key={doctor.id}
-              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0">
-                  {doctor.avatarUrl ? (
-                    <img
-                      src={doctor.avatarUrl}
-                      alt={doctor.fullName}
-                      className="w-16 h-16 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-2xl font-semibold text-blue-600">
-                        {doctor.fullName.charAt(0)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-gray-900 truncate">
-                    {doctor.fullName}
-                  </h3>
-                  <p className="text-sm text-gray-500">{doctor.specialty}</p>
-                  {doctor.user && (
-                    <>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {doctor.user.email}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {doctor.user.phone}
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {doctor.degree && (
-                <div className="mt-4">
-                  <p className="text-sm text-gray-600">{doctor.degree}</p>
-                </div>
-              )}
-
-              <div className="mt-4 flex items-center justify-between">
-                <span
-                  className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                    doctor.isActive
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                  }`}
-                >
-                  {doctor.isActive ? "Hoạt động" : "Không hoạt động"}
-                </span>
-                <button
-                  onClick={() => router.push(`/admin/doctors/${doctor.id}`)}
-                  className="text-blue-600 hover:text-blue-900 text-sm font-medium"
-                >
-                  Chi tiết →
-                </button>
-              </div>
-            </div>
-          ))}
+        {/* Search */}
+        <div className="bg-white p-4 rounded-lg shadow">
+          <input
+            type="text"
+            placeholder="Tìm kiếm theo tên, chuyên khoa hoặc email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
         </div>
 
-        {doctors.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            Chưa có bác sĩ nào
-          </div>
-        )}
+        {/* Doctors Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Bác sĩ
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Chuyên khoa
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Liên hệ
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Học vị
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Trạng thái
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Thao tác
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredDoctors.map((doctor) => (
+                <tr key={doctor.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10">
+                        {doctor.avatarUrl ? (
+                          <img
+                            className="h-10 w-10 rounded-full object-cover"
+                            src={doctor.avatarUrl}
+                            alt=""
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <span className="text-sm font-medium text-blue-600">
+                              {doctor.fullName.charAt(0)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900">
+                          {doctor.fullName}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {doctor.specialty}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {doctor.user?.email}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {doctor.user?.phone}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">
+                      {doctor.degree || "-"}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        doctor.isActive
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {doctor.isActive ? "Hoạt động" : "Không hoạt động"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => router.push(`/admin/doctors/${doctor.id}`)}
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      Chi tiết
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {filteredDoctors.length === 0 && (
+            <div className="text-center py-12 text-gray-500">
+              Không tìm thấy bác sĩ nào
+            </div>
+          )}
+        </div>
       </div>
     </AdminLayout>
   );

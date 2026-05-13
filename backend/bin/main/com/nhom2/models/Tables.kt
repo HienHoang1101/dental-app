@@ -189,3 +189,43 @@ object Notifications : Table("notifications") {
 
     override val primaryKey = PrimaryKey(id)
 }
+
+// ── MEDICATIONS ──────────────────────────────────
+object Medications : Table("medications") {
+    val id            = uuid("id").autoGenerate()
+    val name          = text("name")
+    val unit          = text("unit")
+    val description   = text("description").nullable()
+    val defaultDosage = text("default_dosage").nullable()
+    val isActive      = bool("is_active").default(true)
+    val createdAt     = timestamp("created_at").clientDefault { Instant.now() }
+    val updatedAt     = timestamp("updated_at").clientDefault { Instant.now() }
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+// ── PRESCRIPTIONS ────────────────────────────────
+object Prescriptions : Table("prescriptions") {
+    val id             = uuid("id").autoGenerate()
+    val appointmentId  = uuid("appointment_id").references(Appointments.id).nullable()
+    val patientId      = uuid("patient_id").references(Users.id)
+    val doctorId       = uuid("doctor_id").references(SupabaseDoctors.id)
+    val diagnosis      = text("diagnosis").nullable()
+    val advice         = text("advice").nullable()
+    val followUpDate   = date("follow_up_date").nullable()
+    val createdAt      = timestamp("created_at").clientDefault { Instant.now() }
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+// ── PRESCRIPTION ITEMS ───────────────────────────
+object PrescriptionItems : Table("prescription_items") {
+    val id                = uuid("id").autoGenerate()
+    val prescriptionId    = uuid("prescription_id").references(Prescriptions.id)
+    val medicationId      = uuid("medication_id").references(Medications.id)
+    val quantity          = integer("quantity")
+    val dosageInstruction = text("dosage_instruction").nullable()
+    val createdAt         = timestamp("created_at").clientDefault { Instant.now() }
+
+    override val primaryKey = PrimaryKey(id)
+}

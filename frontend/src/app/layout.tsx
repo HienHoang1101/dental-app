@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "@/styles/globals.css";
 import { ChatWidget } from "@/components/chat/ChatWidget";
 import GoogleAuthProvider from "@/components/providers/GoogleAuthProvider";
+import { Toaster } from "react-hot-toast";
 
 const inter = Inter({ subsets: ["latin", "vietnamese"] });
 
@@ -22,6 +23,7 @@ export default function RootLayout({
         <GoogleAuthProvider>
           {children}
           <ChatWidget />
+          <Toaster position="top-right" />
         </GoogleAuthProvider>
       </body>
     </html>

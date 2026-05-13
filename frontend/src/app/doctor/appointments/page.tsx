@@ -11,7 +11,9 @@ import {
   CheckCircle,
   XCircle,
   Filter,
+  FileText,
 } from "lucide-react";
+import PrescriptionModal from "@/components/prescription/PrescriptionModal";
 
 export default function DoctorAppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -28,6 +30,7 @@ export default function DoctorAppointmentsPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [followUpId, setFollowUpId] = useState<string | null>(null);
+  const [prescriptionAppointment, setPrescriptionAppointment] = useState<Appointment | null>(null);
   const [followUpData, setFollowUpData] = useState({
     date: "",
     startTime: "09:00",
@@ -317,6 +320,14 @@ export default function DoctorAppointmentsPage() {
                       {appointment.status === "confirmed" && (
                         <div className="flex space-x-2 ml-4">
                           <button
+                            onClick={() => setPrescriptionAppointment(appointment)}
+                            className="px-3 py-1.5 text-sm bg-orange-600 text-white hover:bg-orange-700 rounded-lg transition-colors flex items-center"
+                            title="Kê đơn thuốc"
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            Kê đơn
+                          </button>
+                          <button
                             onClick={() => {
                               setFollowUpId(appointment.id);
                               const tomorrow = new Date();
@@ -344,6 +355,14 @@ export default function DoctorAppointmentsPage() {
                       )}
                       {appointment.status === "completed" && (
                         <div className="flex space-x-2 ml-4">
+                          <button
+                            onClick={() => setPrescriptionAppointment(appointment)}
+                            className="px-3 py-1.5 text-sm bg-orange-600 text-white hover:bg-orange-700 rounded-lg transition-colors flex items-center"
+                            title="Xem/Sửa đơn thuốc"
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            Đơn thuốc
+                          </button>
                         </div>
                       )}
                     </div>
@@ -566,6 +585,17 @@ export default function DoctorAppointmentsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {prescriptionAppointment && (
+        <PrescriptionModal
+          appointment={prescriptionAppointment}
+          onClose={() => setPrescriptionAppointment(null)}
+          onSuccess={() => {
+            setPrescriptionAppointment(null);
+            loadAppointments();
+          }}
+        />
       )}
     </DoctorLayout>
   );

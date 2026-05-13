@@ -17,6 +17,7 @@ import com.nhom2.chat.chatRoutes
 import com.nhom2.weekschedule.weeklyScheduleRoutes
 import com.nhom2.schedulechange.scheduleChangeRoutes
 import com.nhom2.exception.scheduleExceptionRoutes
+import com.nhom2.prescription.prescriptionRoutes
 import com.nhom2.config.DatabaseConfig
 import io.ktor.server.application.*
 import io.ktor.server.response.*
@@ -34,6 +35,7 @@ fun Application.configureRouting() {
 
         // Register all routes under /api prefix
         route("/api") {
+            prescriptionRoutes()
             authRoutes()
             patientRoutes()
             healthRecordRoutes()
@@ -46,9 +48,7 @@ fun Application.configureRouting() {
             scheduleRoutes()
             notificationRoutes()
             dashboardRoutes()
-            chatRoutes()  // Chat routes
-            
-            // Phase 1: New schedule system routes
+            chatRoutes()
             weeklyScheduleRoutes()
             scheduleChangeRoutes()
             scheduleExceptionRoutes()

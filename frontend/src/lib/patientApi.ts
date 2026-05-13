@@ -198,6 +198,21 @@ export const patientApi = {
     });
   },
 
+  // Prescriptions
+  getPrescriptionByAppointment: async (appointmentId: string) => {
+    try {
+      const response = await api.get<ApiResponse<any>>(
+        `/appointments/${appointmentId}/prescription`,
+      );
+      return response.data.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
   // Notifications
   getNotifications: async (): Promise<Notification[]> => {
     const response = await api.get<ApiResponse<Notification[]>>(

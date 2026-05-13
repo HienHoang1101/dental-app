@@ -16,6 +16,7 @@ import {
   FileText,
   DollarSign,
   AlertCircle,
+  Pill,
 } from "lucide-react";
 import { formatDateLong, parseLocalDate } from "@/lib/dateUtils";
 
@@ -29,6 +30,7 @@ export default function AppointmentDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [prescription, setPrescription] = useState<any | null>(null);
 
   useEffect(() => {
     loadAppointment();
@@ -40,6 +42,14 @@ export default function AppointmentDetailPage() {
       setAppointment(data);
     } catch (error) {
       console.error("Failed to load appointment:", error);
+    }
+
+    // Load prescription if completed
+    try {
+      const prescData = await patientApi.getPrescriptionByAppointment(appointmentId);
+      setPrescription(prescData);
+    } catch (error) {
+      console.error("Failed to load prescription:", error);
     } finally {
       setLoading(false);
     }
@@ -352,6 +362,90 @@ export default function AppointmentDetailPage() {
             )}
           </div>
         </div>
+        
+        {/* Prescription Section */}
+        {prescription && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6 border-t-4 border-blue-500">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Pill className="h-6 w-6 text-blue-600" />
+                Đơn thuốc từ bác sĩ
+              </h2>
+              {prescription.createdAt && (
+                <span className="text-sm text-gray-500">
+                  Ngày kê: {new Date(prescription.createdAt).toLocaleDateString("vi-VN")}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Chẩn đoán</p>
+                <p className="mt-1 text-lg text-gray-900 font-medium">{prescription.diagnosis || "Chưa có chẩn đoán chi tiết"}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Hẹn tái khám</p>
+                <p className="mt-1 text-lg text-blue-600 font-medium">
+                  {prescription.followUpDate ? new Date(prescription.followUpDate).toLocaleDateString("vi-VN") : "Theo chỉ định bác sĩ"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Lời dặn bác sĩ</p>
+              <div className="bg-blue-50 p-4 rounded-lg text-gray-800 italic">
+                "{prescription.advice || "Uống thuốc đúng liều và tái khám đúng hẹn."}"
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Danh mục thuốc</p>
+              <div className="overflow-hidden border border-gray-200 rounded-lg">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên thuốc</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Số lượng</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cách dùng</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {prescription.items && prescription.items.length > 0 ? (
+                      prescription.items.map((item: any, index: number) => (
+                        <tr key={index}>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{item.medicationName}</div>
+                            <div className="text-xs text-gray-500">{item.unit}</div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-semibold">
+                            {item.quantity} {item.unit}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {item.dosageInstruction}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={3} className="px-4 py-8 text-center text-gray-500">Không có thông tin thuốc</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end">
+              <button 
+                onClick={() => window.print()}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                <FileText className="h-4 w-4" />
+                In đơn thuốc
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Actions */}
         {(appointment.status === "pending" ||
