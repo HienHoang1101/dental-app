@@ -1,3 +1,18 @@
+# Model files (large; regenerate from notebook)
+models/svm_pipeline.joblib
+models/phobert_best/
+models/phobert_best.zip
+models/phobert_multilabel_group_tuned/
+models/svm_multilabel_group/
+models/__results___files/
+models/__huggingface_repos__.json
+models/*.png
+models/*.OLD
+
+# Local datasets and scraped raw data
+*.csv
+*.jsonl
+
 # Secrets
 .env
 
