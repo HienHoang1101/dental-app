@@ -22,6 +22,8 @@ export default function ChatHistoryPage() {
     loadSessions();
   }, []);
 
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+
   const loadSessions = async () => {
     try {
       setIsLoading(true);
@@ -39,13 +41,20 @@ export default function ChatHistoryPage() {
   };
 
   const handleDelete = async (sessionId: string) => {
-    if (!confirm("Bạn có chắc muốn xóa cuộc trò chuyện này?")) return;
+    if (deletingSessionId !== sessionId) {
+      setDeletingSessionId(sessionId);
+      // Tự động reset sau 3 giây nếu không bấm xác nhận
+      setTimeout(() => setDeletingSessionId(null), 3000);
+      return;
+    }
 
     try {
       await deleteChatSession(sessionId);
       setSessions(sessions.filter((s) => s.id !== sessionId));
+      setDeletingSessionId(null);
     } catch (err: any) {
-      alert(err.response?.data?.error || "Failed to delete session");
+      alert(err.response?.data?.error || "Không thể xóa cuộc trò chuyện");
+      setDeletingSessionId(null);
     }
   };
 
@@ -140,10 +149,23 @@ export default function ChatHistoryPage() {
                   </button>
                   <button
                     onClick={() => handleDelete(session.id)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2"
+                    className={`${
+                      deletingSessionId === session.id
+                        ? "bg-orange-600 hover:bg-orange-700"
+                        : "bg-red-600 hover:bg-red-700"
+                    } text-white px-4 py-2 rounded-md transition-all flex items-center gap-2`}
                   >
-                    <Trash2 className="w-4 h-4" />
-                    Xóa
+                    {deletingSessionId === session.id ? (
+                      <>
+                        <Trash2 className="w-4 h-4 animate-pulse" />
+                        Xác nhận?
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Xóa
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

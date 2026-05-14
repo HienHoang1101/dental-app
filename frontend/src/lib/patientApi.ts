@@ -165,6 +165,7 @@ export const patientApi = {
     serviceId?: string;
     notes?: string;
     parentAppointmentId?: string; // For follow-ups
+    chatSessionId?: string; // Link to chat session
   }): Promise<Appointment> => {
     const response = await api.post<ApiResponse<Appointment>>(
       "/appointments/v2",

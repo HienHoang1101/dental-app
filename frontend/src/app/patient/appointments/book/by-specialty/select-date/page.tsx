@@ -17,6 +17,8 @@ export default function SelectDateBySpecialtyPage() {
   const specialtyId = searchParams.get("specialtyId");
   const serviceId = searchParams.get("serviceId");
 
+  const sessionId = searchParams.get("sessionId");
+
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,9 +48,9 @@ export default function SelectDateBySpecialtyPage() {
 
   const handleContinue = () => {
     if (selectedDate) {
-      router.push(
-        `/patient/appointments/book/by-specialty/select-doctor?specialtyId=${specialtyId}&serviceId=${serviceId}&date=${selectedDate}`,
-      );
+      let url = `/patient/appointments/book/by-specialty/select-doctor?specialtyId=${specialtyId}&serviceId=${serviceId}&date=${selectedDate}`;
+      if (sessionId) url += `&sessionId=${sessionId}`;
+      router.push(url);
     }
   };
 

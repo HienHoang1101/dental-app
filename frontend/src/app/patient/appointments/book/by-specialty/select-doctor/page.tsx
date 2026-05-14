@@ -17,6 +17,8 @@ export default function SelectDoctorBySpecialtyPage() {
   const serviceId = searchParams.get("serviceId");
   const date = searchParams.get("date");
 
+  const sessionId = searchParams.get("sessionId");
+
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
   const [timeSlots, setTimeSlots] = useState<Array<{ start: string; end: string }>>([]);
@@ -66,9 +68,9 @@ export default function SelectDoctorBySpecialtyPage() {
 
   const handleContinue = () => {
     if (selectedDoctor && selectedSlot) {
-      router.push(
-        `/patient/appointments/book/confirm?doctorId=${selectedDoctor}&serviceId=${serviceId}&startTime=${encodeURIComponent(selectedSlot.start)}&endTime=${encodeURIComponent(selectedSlot.end)}&date=${date}`,
-      );
+      let url = `/patient/appointments/book/confirm?doctorId=${selectedDoctor}&serviceId=${serviceId}&startTime=${encodeURIComponent(selectedSlot.start)}&endTime=${encodeURIComponent(selectedSlot.end)}&date=${date}`;
+      if (sessionId) url += `&sessionId=${sessionId}`;
+      router.push(url);
     }
   };
 

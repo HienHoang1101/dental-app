@@ -164,17 +164,21 @@ export function ChatWidget() {
 
         {/* Service Suggestions */}
         {suggestions && suggestions.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-gray-700">
-              💡 Dịch vụ phù hợp:
-            </p>
-            {suggestions.map((suggestion) => (
-              <ServiceSuggestionCard
-                key={suggestion.serviceId}
-                suggestion={suggestion}
-                sessionId={currentSession?.id || ""}
-              />
-            ))}
+          <div className="pb-2">
+            <div className="flex items-center gap-1 mb-2 px-1">
+              <div className="h-px flex-1 bg-gray-200"></div>
+              <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Dịch vụ gợi ý</span>
+              <div className="h-px flex-1 bg-gray-200"></div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {suggestions.map((suggestion) => (
+                <ServiceSuggestionCard
+                  key={suggestion.serviceId}
+                  suggestion={suggestion}
+                  sessionId={currentSession?.id || ""}
+                />
+              ))}
+            </div>
           </div>
         )}
 

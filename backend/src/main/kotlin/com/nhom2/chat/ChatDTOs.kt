@@ -36,7 +36,8 @@ data class ChatSessionResponse(
     val endedAt: String?,
     val summary: String?,
     val primaryLabel: String?,
-    val primaryConfidence: Double?
+    val primaryConfidence: Double?,
+    val isDeleted: Boolean = false
 )
 
 @Serializable
@@ -61,6 +62,7 @@ data class SendMessageResponse(
 data class ServiceSuggestion(
     val serviceId: String,
     val serviceName: String,
+    val specialtyId: String?,
     val confidence: Double,
     val estimatedPrice: String?
 )
@@ -87,7 +89,8 @@ data class PatientChatHistoryResponse(
 data class MLChatRequest(
     val text: String,
     @Serializable(with = BooleanSerializer::class)
-    val use_rag: Boolean = true
+    val use_rag: Boolean = true,
+    val session_id: String? = null
 )
 
 @Serializable

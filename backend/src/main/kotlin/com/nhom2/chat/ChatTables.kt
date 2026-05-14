@@ -17,6 +17,7 @@ object ChatSessions : Table("chat_sessions") {
     val summary            = text("summary").nullable()
     val primaryLabel       = text("primary_label").nullable()
     val primaryConfidence  = double("primary_confidence").nullable()
+    val isDeleted          = bool("is_deleted").default(false)
 
     override val primaryKey = PrimaryKey(id)
 }

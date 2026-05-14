@@ -1,6 +1,7 @@
 package com.nhom2.chat
 
 import com.nhom2.Security
+import com.nhom2.models.Services
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -18,7 +19,7 @@ import java.util.UUID
 object ChatService {
     
     private val env = io.github.cdimascio.dotenv.dotenv { ignoreIfMissing = true }
-    private val mlServiceUrl = env["ML_SERVICE_URL"] ?: System.getenv("ML_SERVICE_URL") ?: "http://localhost:8001"
+    private val mlServiceUrl = env["ML_SERVICE_URL"] ?: System.getenv("ML_SERVICE_URL") ?: "http://localhost:8000"
     
     private val httpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
@@ -29,16 +30,19 @@ object ChatService {
         }
     }
     
-    // ── Label to Services Mapping ───────────────────────────
-    private val labelToServices = mapOf(
-        "sau_rang" to listOf("Hàn răng", "Trám răng", "Điều trị tủy"),
-        "viem_nuou" to listOf("Lấy cao răng", "Điều trị nha chu"),
-        "e_buot" to listOf("Trám răng", "Bọc răng sứ", "Điều trị tủy"),
-        "rang_khon" to listOf("Nhổ răng khôn", "Phẫu thuật răng khôn"),
-        "chinh_nha" to listOf("Niềng răng mắc cài", "Niềng răng invisalign"),
-        "tham_my" to listOf("Bọc răng sứ", "Tẩy trắng răng", "Dán veneer"),
-        "mat_rang" to listOf("Cấy ghép implant", "Làm cầu răng", "Hàm giả tháo lắp"),
-        "khac" to emptyList()
+    // ── Label to Services Mapping (Synced with ML-Service v2.0) ───────────────────────────
+    private val labelToServiceKeywords = mapOf(
+        "sau_rang" to listOf("Hàn răng", "Trám răng", "Sâu răng"),
+        "viem_tuy" to listOf("Điều trị tủy", "Nội nha"),
+        "viem_nuou" to listOf("Lấy cao răng", "Vệ sinh răng", "Nha chu"),
+        "viem_nha_chu" to listOf("Điều trị nha chu", "Cạo vôi răng"),
+        "rang_khon_moc_lech" to listOf("Nhổ răng khôn", "Tiểu phẫu"),
+        "nhay_cam_nga" to listOf("Trám răng", "Chống ê buốt"),
+        "gay_vo_rang" to listOf("Phục hình", "Răng sứ", "Trám răng"),
+        "nhiem_trung_rang" to listOf("Điều trị tủy", "Nhổ răng", "Áp xe"),
+        "tham_my" to listOf("Tẩy trắng", "Dán sứ", "Veneer", "Bọc răng sứ"),
+        "chinh_nha" to listOf("Niềng răng", "Invisalign"),
+        "mat_rang" to listOf("Implant", "Cấy ghép", "Cầu răng", "Hàm giả")
     )
     
     /**
@@ -58,7 +62,8 @@ object ChatService {
                 endedAt = null,
                 summary = null,
                 primaryLabel = null,
-                primaryConfidence = null
+                primaryConfidence = null,
+                isDeleted = false
             )
         }
     }
@@ -68,7 +73,7 @@ object ChatService {
      */
     fun getSessionsByPatient(patientId: UUID): List<ChatSessionResponse> {
         return transaction {
-            ChatSessions.select { ChatSessions.patientId eq patientId }
+            ChatSessions.select { (ChatSessions.patientId eq patientId) and (ChatSessions.isDeleted eq false) }
                 .orderBy(ChatSessions.startedAt, SortOrder.DESC)
                 .map { row ->
                     ChatSessionResponse(
@@ -78,7 +83,8 @@ object ChatService {
                         endedAt = row[ChatSessions.endedAt]?.toString(),
                         summary = row[ChatSessions.summary],
                         primaryLabel = row[ChatSessions.primaryLabel],
-                        primaryConfidence = row[ChatSessions.primaryConfidence]
+                        primaryConfidence = row[ChatSessions.primaryConfidence],
+                        isDeleted = row[ChatSessions.isDeleted]
                     )
                 }
         }
@@ -99,7 +105,8 @@ object ChatService {
                 endedAt = sessionRow[ChatSessions.endedAt]?.toString(),
                 summary = sessionRow[ChatSessions.summary],
                 primaryLabel = sessionRow[ChatSessions.primaryLabel],
-                primaryConfidence = sessionRow[ChatSessions.primaryConfidence]
+                primaryConfidence = sessionRow[ChatSessions.primaryConfidence],
+                isDeleted = sessionRow[ChatSessions.isDeleted]
             )
             
             val messages = ChatMessages.select { ChatMessages.sessionId eq sessionId }
@@ -147,7 +154,7 @@ object ChatService {
         val mlResponse = try {
             httpClient.post("$mlServiceUrl/chat") {
                 contentType(ContentType.Application.Json)
-                setBody(MLChatRequest(text = content, use_rag = true))
+                setBody(MLChatRequest(text = content, use_rag = true, session_id = sessionId.toString()))
             }.body<MLChatResponse>()
         } catch (e: Exception) {
             // Fallback nếu ML Service không available
@@ -195,8 +202,8 @@ object ChatService {
             }
         }
         
-        // 5. Tạo service suggestions (nếu confidence > 0.6)
-        val suggestions = if (mlResponse.ml_result.confidence > 0.6) {
+        // 5. Tạo service suggestions (nếu confidence > 0.4 - ngưỡng thấp hơn cho gợi ý)
+        val suggestions = if (mlResponse.ml_result.confidence > 0.4) {
             getServiceSuggestions(mlResponse.ml_result.label, mlResponse.ml_result.confidence)
         } else null
         
@@ -208,20 +215,29 @@ object ChatService {
     }
     
     /**
-     * Lấy service suggestions dựa trên ML label
+     * Lấy service suggestions dựa trên ML label bằng cách truy vấn database
      */
-    private suspend fun getServiceSuggestions(label: String, confidence: Double): List<ServiceSuggestion> {
-        val serviceNames = labelToServices[label] ?: return emptyList()
+    private fun getServiceSuggestions(label: String, confidence: Double): List<ServiceSuggestion> {
+        val keywords = labelToServiceKeywords[label] ?: return emptyList()
         
-        // TODO: Query actual services from database
-        // For now, return mock data
-        return serviceNames.mapIndexed { index, name ->
-            ServiceSuggestion(
-                serviceId = UUID.randomUUID().toString(),
-                serviceName = name,
-                confidence = if (index == 0) confidence else confidence * 0.3,
-                estimatedPrice = "500,000đ - 2,000,000đ"
-            )
+        return transaction {
+            // Tìm kiếm các dịch vụ có tên chứa keywords
+            val matchedServices = Services.select { 
+                Services.isActive eq true 
+            }.filter { row ->
+                val name = row[Services.name].lowercase()
+                keywords.any { kw -> name.contains(kw.lowercase()) }
+            }.take(3) // Tối đa 3 gợi ý
+            
+            matchedServices.mapIndexed { index, row ->
+                ServiceSuggestion(
+                    serviceId = row[Services.id].toString(),
+                    serviceName = row[Services.name],
+                    specialtyId = row[Services.specialtyId]?.toString(),
+                    confidence = if (index == 0) confidence else confidence * 0.8,
+                    estimatedPrice = String.format("%,dđ", row[Services.price])
+                )
+            }
         }
     }
     
@@ -277,10 +293,11 @@ object ChatService {
      */
     fun deleteSession(sessionId: UUID): Boolean {
         return transaction {
-            // Xóa messages trước
-            ChatMessages.deleteWhere { ChatMessages.sessionId eq sessionId }
-            // Xóa session
-            ChatSessions.deleteWhere { ChatSessions.id eq sessionId } > 0
+            // Soft delete: Chỉ set is_deleted = true
+            // Không xóa messages để bác sĩ vẫn có thể xem lại trong appointment context
+            ChatSessions.update({ ChatSessions.id eq sessionId }) {
+                it[ChatSessions.isDeleted] = true
+            } > 0
         }
     }
     
@@ -355,7 +372,8 @@ object ChatService {
                             endedAt = it[ChatSessions.endedAt]?.toString(),
                             summary = it[ChatSessions.summary],
                             primaryLabel = it[ChatSessions.primaryLabel],
-                            primaryConfidence = it[ChatSessions.primaryConfidence]
+                            primaryConfidence = it[ChatSessions.primaryConfidence],
+                            isDeleted = it[ChatSessions.isDeleted]
                         )
                         ChatHistoryResponse(session, emptyList()) // Không load messages trong list view
                     }

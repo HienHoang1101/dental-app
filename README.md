@@ -88,33 +88,35 @@ Hệ thống quản lý phòng khám nha khoa toàn diện với 3 actors: Khác
 
 ### 1. Backend Setup
 1. Di chuyển vào thư mục backend: `cd backend`
-2. Tạo file `.env`:
+2. Tạo file `.env` dựa trên `.env.example`:
    ```env
    DATABASE_URL=jdbc:postgresql://your-supabase-url:5432/postgres
    DATABASE_USER=postgres
    DATABASE_PASSWORD=your-password
    JWT_SECRET=your-secret-key
+   GEMINI_API_KEY=your-api-key
    ```
-3. Chạy backend bằng Gradle:
-   ```bash
-   ./gradlew run
+3. **Database Migration (QUAN TRỌNG)**: Chạy lệnh SQL sau trong Supabase để hỗ trợ tính năng xóa lịch sử chat:
+   ```sql
+   ALTER TABLE chat_sessions ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE;
    ```
-   *Backend sẽ chạy tại `http://localhost:8080`*
+4. Chạy dự án: `.\gradlew.bat run`
 
-### 2. Frontend Setup
-1. Di chuyển vào thư mục frontend: `cd frontend`
-2. Cài đặt thư viện: `npm install`
-3. Tạo file `.env.local`:
+### 2. ML Service Setup
+1. Cài đặt Python 3.10+
+2. Di chuyển vào: `cd ml-service`
+3. Cài đặt thư viện: `pip install -r requirements.txt`
+4. Cấu hình `.env`:
    ```env
-   NEXT_PUBLIC_API_URL=http://localhost:8080
+   GEMINI_API_KEY=your-key
+   PINECONE_API_KEY=your-key
+   # Cấu hình 9Router (để bypass giới hạn của Gemini)
+   NINEROUTER_API_KEY=your-9router-key
+   NINEROUTER_BASE_URL=http://localhost:20128/v1
+   NINEROUTER_MODEL=gemini-2.0-flash
    ```
-4. Chạy development server:
-   ```bash
-   npm run dev
-   ```
-   *Frontend sẽ chạy tại `http://localhost:3000`*
-
-### 3. ML Service Setup (AI Chatbot)
+5. Chạy service: `uvicorn main:app --reload`
+### 2. ML Service Setup (AI Chatbot)
 1. Di chuyển vào thư mục ML: `cd ml-service`
 2. Tạo Virtual Environment và kích hoạt:
    ```bash
@@ -124,17 +126,31 @@ Hệ thống quản lý phòng khám nha khoa toàn diện với 3 actors: Khác
    # macOS/Linux:
    source .venv/bin/activate
    ```
-3. Cài đặt thư viện: `pip install -r requirements-windows.txt` (hoặc `requirements.txt`)
+3. Cài đặt thư viện: `pip install -r requirements.txt`
 4. Tạo file `.env`:
    ```env
    GEMINI_API_KEY=your-gemini-key
    PINECONE_API_KEY=your-pinecone-key
+   # Cấu hình 9Router (để bypass giới hạn của Gemini)
+   NINEROUTER_API_KEY=your-9router-key
+   NINEROUTER_BASE_URL=http://localhost:20128/v1
+   NINEROUTER_MODEL=gemini-2.0-flash
    ```
 5. Chạy FastAPI server:
    ```bash
    uvicorn main:app --reload --port 8000
    ```
    *ML Service sẽ chạy tại `http://localhost:8000`*
+
+### 3. Frontend Setup
+1. Di chuyển vào: `cd frontend`
+2. Cài đặt thư viện: `npm install`
+3. Tạo file `.env.local`:
+   ```env
+   NEXT_PUBLIC_API_URL=http://localhost:8080/api
+   ```
+4. Chạy ứng dụng: `npm run dev`
+   *Frontend sẽ chạy tại `http://localhost:3000`*
 
 ## 📊 Database Schema (Cập nhật)
 

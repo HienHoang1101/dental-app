@@ -28,6 +28,7 @@ export default function ConfirmAppointmentPage() {
   const endTime = searchParams.get("endTime"); // New system
   const date = searchParams.get("date");
 
+  const sessionId = searchParams.get("sessionId");
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [timeSlot, setTimeSlot] = useState<TimeSlot | null>(null);
   const [service, setService] = useState<Service | null>(null);
@@ -114,6 +115,7 @@ export default function ConfirmAppointmentPage() {
           endTime: endTime,
           serviceId: selectedServiceId,
           notes: notes.trim() || undefined,
+          chatSessionId: sessionId || undefined
         });
       } else if (timeSlot) {
         await patientApi.createAppointment({

@@ -1,363 +1,293 @@
 """
-ml-service/rag_pipeline.py
+RAG pipeline for the dental knowledge base.
 
-RAG Pipeline — Dental Knowledge Base
-Đọc PDF → Chunk → Embed → Upsert lên Pinecone
+Responsibilities:
+- Upload PDF -> split into chunks -> embed -> store in Pinecone.
+- Search context -> embed query -> retrieve relevant document chunks.
 
-Dùng để:
-1. Admin upload PDF mới → gọi script này
-2. Hoặc Backend Kotlin gọi endpoint /embed của FastAPI
-
-Chạy thủ công:
-    python rag_pipeline.py --pdf path/to/file.pdf
-    python rag_pipeline.py --dir path/to/pdf_folder/
+This implementation uses LangChain + Gemini embeddings + Pinecone.
+The Gemini embedding dimensionality is configurable so it can match the
+existing Pinecone index dimension.
 """
 
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
-import os
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-import re
-import uuid
-import argparse
-from pathlib import Path
-from typing import Generator
-
-# ── Thư viện cần cài ──────────────────────────────────────
-# pip install pinecone-client sentence-transformers pypdf2
-from pinecone import Pinecone, ServerlessSpec
-from sentence_transformers import SentenceTransformer
-import PyPDF2
-
-# ── Cấu hình ───────────────────────────────────────────────
-PINECONE_API_KEY  = os.getenv("PINECONE_API_KEY", "")
-PINECONE_INDEX    = os.getenv("PINECONE_INDEX", "dental-kb")
-PINECONE_REGION   = os.getenv("PINECONE_REGION", "us-east-1")  # Singapore nếu bạn chọn region đó
-
-EMBED_MODEL_NAME  = "bkai-foundation-models/vietnamese-bi-encoder"
-EMBED_DIMENSION   = 768   # phải khớp với index dimension trên Pinecone
-
-CHUNK_SIZE        = 500   # số ký tự mỗi chunk
-CHUNK_OVERLAP     = 50    # số ký tự overlap giữa các chunk
-BATCH_SIZE        = 100   # số vector upsert mỗi lần (Pinecone limit)
-
-# ── Load embedding model (1 lần duy nhất) ──────────────────
-print(f"Loading embedding model: {EMBED_MODEL_NAME}")
-_embed_model = SentenceTransformer(EMBED_MODEL_NAME)
-print("✅ Embedding model loaded")
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 
-# ══════════════════════════════════════════════════════════
-# 1. ĐỌC PDF
-# ══════════════════════════════════════════════════════════
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
+PINECONE_INDEX = os.getenv("PINECONE_INDEX", "dental-kb")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
-def read_pdf(pdf_path: str) -> str:
-    """Đọc toàn bộ text từ file PDF."""
-    text = ""
-    with open(pdf_path, "rb") as f:
-        reader = PyPDF2.PdfReader(f)
-        for page_num, page in enumerate(reader.pages):
-            page_text = page.extract_text()
-            if page_text:
-                text += f"\n[Trang {page_num + 1}]\n{page_text}"
-    return text
+# models/embedding-001 is no longer available on current Gemini API accounts.
+# gemini-embedding-001 supports output_dimensionality, so we set it to 768 by
+# default to match the existing Pinecone index created for dental-kb.
+EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
+EMBEDDING_DIMENSIONS = int(os.getenv("GEMINI_EMBEDDING_DIMENSIONS", "768"))
 
+CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "500"))
+CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "100"))
+MAX_PAGES = int(os.getenv("RAG_MAX_PAGES", "0"))
 
-def clean_text(text: str) -> str:
-    """Làm sạch text: bỏ ký tự thừa, chuẩn hóa khoảng trắng."""
-    # Bỏ ký tự đặc biệt không cần thiết
-    text = re.sub(r'\x00', '', text)
-    # Chuẩn hóa xuống dòng
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    # Chuẩn hóa khoảng trắng
-    text = re.sub(r' {2,}', ' ', text)
-    # Bỏ dòng chỉ có số (số trang)
-    text = re.sub(r'^\s*\d+\s*$', '', text, flags=re.MULTILINE)
-    return text.strip()
+_embeddings = None
+_pinecone_client = None
+_pinecone_index = None
 
 
-# ══════════════════════════════════════════════════════════
-# 2. CHUNK TEXT
-# ══════════════════════════════════════════════════════════
+def _require_dependencies() -> None:
+    missing = []
+    try:
+        import langchain  # noqa: F401
+    except ImportError:
+        missing.append("langchain")
+    try:
+        import langchain_community  # noqa: F401
+    except ImportError:
+        missing.append("langchain-community")
+    try:
+        import langchain_google_genai  # noqa: F401
+    except ImportError:
+        missing.append("langchain-google-genai")
+    try:
+        import langchain_pinecone  # noqa: F401
+    except ImportError:
+        missing.append("langchain-pinecone")
 
-def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
-    """Chunk đơn giản, nhanh hơn."""
-    chunks = []
-    start = 0
-    text_len = len(text)
-
-    while start < text_len:
-        end = min(start + chunk_size, text_len)
-        chunk = text[start:end].strip()
-        if len(chunk) > 50:
-            chunks.append(chunk)
-        if end == text_len:
-            break
-        start = end - overlap
-
-    print(f"  → {len(chunks)} chunks")
-    return chunks
-
-
-# ══════════════════════════════════════════════════════════
-# 3. EMBED
-# ══════════════════════════════════════════════════════════
-
-def embed_texts(texts: list[str]) -> list[list[float]]:
-    print(f"  Bắt đầu embed {len(texts)} chunks...")
-    embeddings = _embed_model.encode(
-        texts,
-        batch_size=8,
-        show_progress_bar=True,
-        normalize_embeddings=True  # chuẩn hóa để cosine = dot product
-    )
-    print("  Embed xong!")
-    return embeddings.tolist()
+    if missing:
+        raise RuntimeError(
+            "Missing RAG dependencies. Install: pip install " + " ".join(missing)
+        )
 
 
-# ══════════════════════════════════════════════════════════
-# 4. UPSERT LÊN PINECONE
-# ══════════════════════════════════════════════════════════
+def _sanitize_namespace(value: str) -> str:
+    namespace = Path(value).stem.lower()
+    namespace = re.sub(r"[^a-z0-9_]+", "_", namespace)
+    namespace = namespace.strip("_")
+    return namespace or "document"
+
+
+def get_embeddings():
+    global _embeddings
+    if _embeddings is None:
+        _require_dependencies()
+        if not GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY is not set")
+
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+        kwargs: dict[str, Any] = {
+            "model": EMBEDDING_MODEL,
+            "google_api_key": GEMINI_API_KEY,
+        }
+        if EMBEDDING_DIMENSIONS > 0:
+            kwargs["output_dimensionality"] = EMBEDDING_DIMENSIONS
+
+        _embeddings = GoogleGenerativeAIEmbeddings(**kwargs)
+    return _embeddings
+
+
+def get_pinecone_client():
+    global _pinecone_client
+    if _pinecone_client is None:
+        if not PINECONE_API_KEY:
+            raise ValueError("PINECONE_API_KEY is not set")
+
+        from pinecone import Pinecone
+
+        _pinecone_client = Pinecone(api_key=PINECONE_API_KEY)
+    return _pinecone_client
+
 
 def get_pinecone_index():
-    """Kết nối Pinecone và trả về index object."""
-    if not PINECONE_API_KEY:
-        raise ValueError("PINECONE_API_KEY chưa được set trong .env")
-
-    pc = Pinecone(api_key=PINECONE_API_KEY)
-
-    # Tạo index nếu chưa có (idempotent)
-    existing = [idx.name for idx in pc.list_indexes()]
-    if PINECONE_INDEX not in existing:
-        print(f"Tạo index mới: {PINECONE_INDEX}")
-        pc.create_index(
-            name=PINECONE_INDEX,
-            dimension=EMBED_DIMENSION,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region=PINECONE_REGION)
-        )
-        print("✅ Index created")
-    else:
-        print(f"✅ Index đã tồn tại: {PINECONE_INDEX}")
-
-    return pc.Index(PINECONE_INDEX)
+    global _pinecone_index
+    if _pinecone_index is None:
+        _pinecone_index = get_pinecone_client().Index(PINECONE_INDEX)
+    return _pinecone_index
 
 
-def recreate_index():
-    """Xóa index cũ và tạo lại với dimension mới. Dùng khi đổi embedding model."""
-    if not PINECONE_API_KEY:
-        raise ValueError("PINECONE_API_KEY chưa được set trong .env")
+def get_vectorstore(namespace: str | None = None):
+    _require_dependencies()
+    from langchain_pinecone import PineconeVectorStore
 
-    pc = Pinecone(api_key=PINECONE_API_KEY)
-    existing = [idx.name for idx in pc.list_indexes()]
-
-    if PINECONE_INDEX in existing:
-        print(f"Xóa index cũ: {PINECONE_INDEX} ...")
-        pc.delete_index(PINECONE_INDEX)
-        print("✅ Index cũ đã xóa")
-
-    print(f"Tạo index mới: {PINECONE_INDEX} (dim={EMBED_DIMENSION}) ...")
-    pc.create_index(
-        name=PINECONE_INDEX,
-        dimension=EMBED_DIMENSION,
-        metric="cosine",
-        spec=ServerlessSpec(cloud="aws", region=PINECONE_REGION)
+    return PineconeVectorStore(
+        index_name=PINECONE_INDEX,
+        embedding=get_embeddings(),
+        namespace=namespace,
     )
-    print(f"✅ Index mới sẵn sàng")
-    return pc.Index(PINECONE_INDEX)
 
 
-def upsert_to_pinecone(
-        index,
-        chunks: list[str],
-        embeddings: list[list[float]],
-        namespace: str,
-        source_file: str
-):
+def upload_pdf(file_path: str, namespace: str) -> dict[str, Any]:
     """
-    Upsert vectors lên Pinecone theo batch.
-    Mỗi vector kèm metadata: text gốc + tên file nguồn.
+    Read a PDF, split it into chunks, embed chunks, and store vectors in Pinecone.
+
+    Args:
+        file_path: PDF path.
+        namespace: Pinecone namespace, usually file stem or document id.
+
+    Returns:
+        {"namespace": "...", "chunk_count": 42, "status": "completed"}
     """
-    vectors = []
-    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-        vector_id = f"{namespace}_{i:04d}"
-        vectors.append({
-            "id": vector_id,
-            "values": embedding,
-            "metadata": {
-                "text": chunk[:1000],  # Pinecone giới hạn metadata size
-                "source": source_file,
+    _require_dependencies()
+    from langchain_community.document_loaders import PyPDFLoader
+    from langchain_pinecone import PineconeVectorStore
+    try:
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+    except ImportError:
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+    pdf_path = Path(file_path)
+    if not pdf_path.exists():
+        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+
+    namespace = _sanitize_namespace(namespace)
+
+    loader = PyPDFLoader(str(pdf_path))
+    pages = loader.load()
+    if MAX_PAGES > 0:
+        pages = pages[:MAX_PAGES]
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+        separators=["\n\n", "\n", ". ", " ", ""],
+    )
+    chunks = splitter.split_documents(pages)
+
+    for index, doc in enumerate(chunks):
+        doc.metadata.update(
+            {
+                "source": pdf_path.name,
                 "namespace": namespace,
-                "chunk_index": i
+                "chunk_index": index,
+                # Keep compatibility with older code that reads metadata["text"].
+                "text": doc.page_content,
             }
-        })
+        )
 
-    # Upsert theo batch
-    total = len(vectors)
-    for i in range(0, total, BATCH_SIZE):
-        batch = vectors[i:i + BATCH_SIZE]
-        index.upsert(vectors=batch, namespace=namespace)
-        print(f"  Upserted {min(i + BATCH_SIZE, total)}/{total} vectors")
-
-    print(f"✅ Done: {total} vectors → namespace '{namespace}'")
-    return total
-
-
-# ══════════════════════════════════════════════════════════
-# 5. PIPELINE CHÍNH
-# ══════════════════════════════════════════════════════════
-
-def process_pdf(pdf_path: str, index) -> dict:
-    """
-    Xử lý 1 file PDF hoàn chỉnh:
-    đọc → clean → chunk → embed → upsert Pinecone
-    Trả về dict kết quả để lưu vào DB (knowledge_documents)
-    """
-    pdf_path = Path(pdf_path)
-    filename = pdf_path.name
-    # Namespace = tên file không có extension, dùng làm ID trong Pinecone
-    namespace = re.sub(r'[^a-z0-9_]', '_', pdf_path.stem.lower())
-
-    print(f"\n{'='*50}")
-    print(f"📄 Đang xử lý: {filename}")
-    print(f"   Namespace:  {namespace}")
-
-    # Bước 1: Đọc PDF
-    print("  [1/4] Đọc PDF...")
-    raw_text = read_pdf(str(pdf_path))
-    clean = clean_text(raw_text)
-    print(f"  → {len(clean)} ký tự sau khi clean")
-
-    if len(clean) < 100:
-        print("  ⚠️ File quá ngắn hoặc không đọc được text (có thể là PDF scan)")
-        return {"status": "failed", "reason": "Không đọc được text từ PDF"}
-
-    # Bước 2: Chunk
-    print(f"  [2/4] Chunking (size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP})...")
-    chunks = chunk_text(clean)
-    print(f"  → {len(chunks)} chunks")
-
-    # Bước 3: Embed
-    print(f"  [3/4] Embedding {len(chunks)} chunks...")
-    embeddings = embed_texts(chunks)
-    print(f"  → {len(embeddings)} vectors (dim={EMBED_DIMENSION})")
-
-    # Bước 4: Upsert
-    print(f"  [4/4] Upsert lên Pinecone...")
-    total = upsert_to_pinecone(index, chunks, embeddings, namespace, filename)
+    PineconeVectorStore.from_documents(
+        documents=chunks,
+        embedding=get_embeddings(),
+        index_name=PINECONE_INDEX,
+        namespace=namespace,
+    )
 
     return {
-        "status": "completed",
-        "filename": filename,
         "namespace": namespace,
-        "chunk_count": total
+        "chunk_count": len(chunks),
+        "status": "completed",
     }
 
 
-def process_directory(dir_path: str, index) -> list[dict]:
-    """Xử lý tất cả PDF trong một thư mục."""
-    results = []
-    pdf_files = list(Path(dir_path).glob("*.pdf"))
-
-    if not pdf_files:
-        print(f"Không tìm thấy file PDF nào trong {dir_path}")
-        return results
-
-    print(f"Tìm thấy {len(pdf_files)} file PDF")
-    for pdf_file in pdf_files:
-        result = process_pdf(str(pdf_file), index)
-        results.append(result)
-
-    return results
-
-
-# ══════════════════════════════════════════════════════════
-# 6. HÀM QUERY (dùng khi chatbot cần tìm context)
-# ══════════════════════════════════════════════════════════
-
-
-PINECONE_NAMESPACES = [
-    "rang_ham_mat",
-    "quytrinhchuyenmonbvrhm",
-    "phac_do_dieu_tri_bv_rhm_2023",
-]
-
-
-def query_knowledge_base(
-        question: str,
-        index,
-        top_k: int = 3,
-        namespace: str = None  # None = tìm trong tất cả namespace
-) -> list[dict]:
+def search_context(query: str, namespace: str | None = None, top_k: int = 5) -> list[str]:
     """
-    Tìm top_k đoạn văn liên quan nhất với câu hỏi.
-    Trả về list dict gồm: text, score, source.
+    Retrieve the most relevant context chunks from Pinecone.
+
+    Args:
+        query: Patient question or diagnosis query.
+        namespace: Optional namespace. If None, search the default namespace.
+        top_k: Number of chunks to return.
+
+    Returns:
+        List of context strings.
     """
-    vector = _embed_model.encode(
-        question, normalize_embeddings=True
-    ).tolist()
+    if not query.strip():
+        return []
 
-    all_results = []
-    for ns in PINECONE_NAMESPACES:
-        results = index.query(
-            vector=vector,
-            top_k=2,
-            include_metadata=True,
-            namespace=ns
-        )
-        for match in results.matches:
-            all_results.append({
-                "text": match.metadata.get("text", ""),
-                "score": round(match.score, 4),
-                "source": match.metadata.get("source", "unknown")
-            })
-
-    all_results.sort(key=lambda x: -x["score"])
-    return all_results[:top_k]
+    vectorstore = get_vectorstore(namespace=namespace)
+    results = vectorstore.similarity_search(query, k=top_k)
+    return [doc.page_content for doc in results]
 
 
-# ══════════════════════════════════════════════════════════
-# 7. CLI — chạy từ terminal
-# ══════════════════════════════════════════════════════════
+def search_context_for_diagnosis(
+    symptoms: list[str],
+    disease_name: str | None = None,
+    top_k: int = 5,
+    namespace: str | None = None,
+) -> list[str]:
+    """
+    Search context using both detected symptoms and the suspected disease name.
+    """
+    query_parts = []
+    if disease_name:
+        query_parts.append(disease_name)
+    query_parts.extend(symptoms)
+    query = " ".join(part for part in query_parts if part)
+    return search_context(query, namespace=namespace, top_k=top_k)
+
+
+def delete_document(namespace: str) -> dict[str, str]:
+    """Delete all vectors of a document namespace from Pinecone."""
+    namespace = _sanitize_namespace(namespace)
+    get_pinecone_index().delete(delete_all=True, namespace=namespace)
+    return {"namespace": namespace, "status": "deleted"}
+
+
+def list_namespaces() -> list[str]:
+    """List document namespaces currently present in the Pinecone index."""
+    stats = get_pinecone_index().describe_index_stats()
+    namespaces = stats.get("namespaces", {})
+    return sorted(namespaces.keys())
+
+
+def process_pdf(pdf_path: str, index=None) -> dict[str, Any]:
+    """
+    Compatibility wrapper for the existing FastAPI /embed endpoint.
+
+    The old function accepted a Pinecone index object. LangChain manages the
+    index internally, so the argument is ignored.
+    """
+    namespace = _sanitize_namespace(Path(pdf_path).stem)
+    return upload_pdf(pdf_path, namespace=namespace)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Upload/search dental PDF RAG context")
+    parser.add_argument("--pdf", help="PDF file to upload")
+    parser.add_argument("--namespace", help="Pinecone namespace. Defaults to PDF filename")
+    parser.add_argument("--query", help="Query text for context search")
+    parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--list", action="store_true", help="List namespaces")
+    parser.add_argument("--delete", help="Delete a namespace")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    if args.list:
+        print(list_namespaces())
+        return
+
+    if args.delete:
+        print(delete_document(args.delete))
+        return
+
+    if args.pdf:
+        namespace = args.namespace or Path(args.pdf).stem
+        print(upload_pdf(args.pdf, namespace=namespace))
+        return
+
+    if args.query:
+        contexts = search_context(args.query, namespace=args.namespace, top_k=args.top_k)
+        for index, context in enumerate(contexts, start=1):
+            print(f"\n--- Context {index} ---")
+            print(context)
+        return
+
+    raise SystemExit("Provide --pdf, --query, --list, or --delete")
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="RAG Pipeline — Dental KB")
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--pdf", type=str, help="Đường dẫn đến 1 file PDF")
-    group.add_argument("--dir", type=str, help="Thư mục chứa nhiều PDF")
-    group.add_argument("--query", type=str, help="Test query (không upload)")
-    group.add_argument("--reindex", action="store_true",
-                       help="Xóa index cũ, tạo lại và upload toàn bộ pdf_docs/")
-    parser.add_argument("--topk", type=int, default=3, help="Số kết quả trả về khi query")
-
-    args = parser.parse_args()
-
-    if args.reindex:
-        index = recreate_index()
-        pdf_dir = str(Path(__file__).parent / "pdf_docs")
-        results = process_directory(pdf_dir, index)
-        print(f"\nTong ket reindex:")
-        for r in results:
-            print(f"  {r.get('filename', '?')}: {r['status']} ({r.get('chunk_count', 0)} chunks)")
-    else:
-        # Kết nối Pinecone
-        index = get_pinecone_index()
-
-        if args.pdf:
-            result = process_pdf(args.pdf, index)
-            print(f"\nKet qua: {result}")
-
-        elif args.dir:
-            results = process_directory(args.dir, index)
-            print(f"\nTong ket:")
-            for r in results:
-                print(f"  {r.get('filename', '?')}: {r['status']} ({r.get('chunk_count', 0)} chunks)")
-
-        elif args.query:
-            print(f"\nQuery: {args.query}")
-            results = query_knowledge_base(args.query, index, top_k=args.topk)
-            print(f"\nTop {args.topk} ket qua:")
-            for i, r in enumerate(results, 1):
-                print(f"\n[{i}] Score: {r['score']} | Source: {r['source']}")
-                print(f"    {r['text'][:200]}...")
+    main()
