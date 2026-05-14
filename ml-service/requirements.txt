@@ -3,11 +3,13 @@ fastapi==0.136.0
 uvicorn[standard]==0.29.0
 python-dotenv==1.0.1
 pydantic==2.13.1
+python-multipart==0.0.20
 
 # ── ML / Classify ─────────────────────────────────────────────
 scikit-learn==1.6.1
 joblib==1.5.3
 numpy==2.4.4
+pandas==2.3.3
 
 # ── Deep Learning (PhoBERT) ───────────────────────────────────
 torch==2.11.0
@@ -17,6 +19,11 @@ tokenizers==0.22.2
 
 # ── Embedding (RAG) ───────────────────────────────────────────
 sentence-transformers==2.7.0
+langchain
+langchain-text-splitters
+langchain-google-genai
+langchain-pinecone
+langchain-community
 
 # ── NLP / Tokenization ────────────────────────────────────────
 underthesea==9.4.0
@@ -30,3 +37,9 @@ google-genai==1.73.1
 
 # ── PDF ───────────────────────────────────────────────────────
 PyPDF2==3.0.1
+pypdf
+
+# Scraping
+requests==2.32.5
+beautifulsoup4==4.14.2
+lxml==6.0.2
