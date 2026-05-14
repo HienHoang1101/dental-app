@@ -116,58 +116,90 @@ export default function SpecialtiesPage() {
           </button>
         </div>
 
-        {/* Specialties Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {specialties.map((specialty) => (
-            <div
-              key={specialty.id}
-              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {specialty.name}
-                </h3>
-                <span
-                  className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                    specialty.isActive
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                  }`}
-                >
-                  {specialty.isActive ? "Hoạt động" : "Không hoạt động"}
-                </span>
-              </div>
-              <p className="text-sm text-gray-600 mb-4">
-                {specialty.description}
-              </p>
-              <div className="text-sm text-gray-500 mb-4">
-                <div>Số bác sĩ: {specialty.doctorCount || 0}</div>
-                <div>
-                  Số dịch vụ: {getServicesBySpecialty(specialty.id).length}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleViewServices(specialty)}
-                  className="flex-1 px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100"
-                >
-                  Xem dịch vụ
-                </button>
-                <button
-                  onClick={() => handleEdit(specialty)}
-                  className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
-                >
-                  Sửa
-                </button>
-                <button
-                  onClick={() => handleDelete(specialty.id)}
-                  className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
-                >
-                  Xóa
-                </button>
-              </div>
+        {/* Specialties Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Tên chuyên khoa
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Mô tả
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Số bác sĩ
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Số dịch vụ
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Trạng thái
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  Thao tác
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {specialties.map((specialty) => (
+                <tr key={specialty.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-semibold text-gray-900">
+                      {specialty.name}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-600 truncate max-w-xs">
+                      {specialty.description}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                    {specialty.doctorCount || 0}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                    {getServicesBySpecialty(specialty.id).length}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                        specialty.isActive
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {specialty.isActive ? "Hoạt động" : "Không hoạt động"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button
+                      onClick={() => handleViewServices(specialty)}
+                      className="text-green-600 hover:text-green-900 mr-4"
+                    >
+                      Dịch vụ
+                    </button>
+                    <button
+                      onClick={() => handleEdit(specialty)}
+                      className="text-blue-600 hover:text-blue-900 mr-4"
+                    >
+                      Sửa
+                    </button>
+                    <button
+                      onClick={() => handleDelete(specialty.id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Xóa
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {specialties.length === 0 && (
+            <div className="text-center py-12 text-gray-500">
+              Chưa có chuyên khoa nào
             </div>
-          ))}
+          )}
         </div>
 
         {/* Modal */}

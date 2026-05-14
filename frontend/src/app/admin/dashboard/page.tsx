@@ -13,6 +13,8 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  DollarSign,
+  TrendingUp,
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -93,7 +95,7 @@ export default function AdminDashboard() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Tổng bệnh nhân</p>
@@ -107,12 +109,12 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Tổng bác sĩ</p>
                 <p className="text-3xl font-bold mt-1">
-                  {stats?.appointmentsByStatus?.confirmed || 0}
+                   {stats?.totalDoctors || 0}
                 </p>
               </div>
               <div className="bg-green-100 p-3 rounded-lg">
@@ -121,7 +123,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Tổng lịch hẹn</p>
@@ -135,7 +137,27 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Tổng doanh thu</p>
+                <p className="text-3xl font-bold mt-1 text-orange-600">
+                  {new Intl.NumberFormat("vi-VN", {
+                    style: "currency",
+                    currency: "VND",
+                  }).format(Number(stats?.totalRevenueAllTime || 0))}
+                </p>
+              </div>
+              <div className="bg-orange-100 p-3 rounded-lg">
+                <DollarSign className="w-6 h-6 text-orange-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Second Row of Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-yellow-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Chờ xác nhận</p>
@@ -145,6 +167,23 @@ export default function AdminDashboard() {
               </div>
               <div className="bg-yellow-100 p-3 rounded-lg">
                 <Clock className="w-6 h-6 text-yellow-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Doanh thu tháng này</p>
+                <p className="text-2xl font-bold mt-1 text-blue-600">
+                  {new Intl.NumberFormat("vi-VN", {
+                    style: "currency",
+                    currency: "VND",
+                  }).format(Number(stats?.totalRevenue || 0))}
+                </p>
+              </div>
+              <div className="bg-blue-100 p-3 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-blue-600" />
               </div>
             </div>
           </div>
@@ -228,6 +267,9 @@ export default function AdminDashboard() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Trạng thái
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Tổng tiền
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -272,6 +314,12 @@ export default function AdminDashboard() {
                         >
                           {getStatusText(appointment.status)}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        {new Intl.NumberFormat("vi-VN", {
+                          style: "currency",
+                          currency: "VND",
+                        }).format(appointment.totalAmount)}
                       </td>
                     </tr>
                   ))

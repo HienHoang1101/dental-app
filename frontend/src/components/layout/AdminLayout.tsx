@@ -38,7 +38,6 @@ export default function AdminLayout({
     { name: "Lịch làm việc", href: "/admin/schedules", icon: Calendar },
     { name: "Duyệt lịch", href: "/admin/schedule-changes", icon: Clock },
     { name: "Người dùng", href: "/admin/users", icon: Settings },
-    { name: "Thông báo", href: "/admin/notifications", icon: Bell },
   ];
 
   const isActive = (href: string) => pathname === href;

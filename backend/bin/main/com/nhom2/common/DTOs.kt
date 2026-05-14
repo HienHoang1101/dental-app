@@ -347,6 +347,7 @@ data class AppointmentDTO(
     val status: String,
     val notes: String?,
     val cancellationReason: String?,
+    val totalAmount: Int = 0,
     val createdAt: String,
     val updatedAt: String
 )
@@ -361,7 +362,8 @@ data class AppointmentSummaryDTO(
     val startTime: String,
     val endTime: String,
     val status: String,
-    val serviceName: String?
+    val serviceName: String?,
+    val totalAmount: Int = 0
 )
 
 @Serializable
@@ -434,7 +436,9 @@ data class CreateNotificationRequest(
 data class DashboardStatsDTO(
     val totalAppointments: Int,
     val totalPatients: Int,
+    val totalDoctors: Int,
     val totalRevenue: String,
+    val totalRevenueAllTime: String,
     val appointmentsByStatus: Map<String, Int>,
     val recentAppointments: List<AppointmentSummaryDTO>
 )
@@ -682,6 +686,7 @@ data class AppointmentDTOV2(
     val cancellationReason: String?,
     val parentAppointmentId: String?,
     val isFollowUp: Boolean,
+    val totalAmount: Int = 0,
     val createdAt: String,
     val updatedAt: String
 )
@@ -700,6 +705,7 @@ data class MedicationDTO(
     val id: String,
     val name: String,
     val unit: String,
+    val price: Int,
     val description: String?,
     val defaultDosage: String?,
     val isActive: Boolean,
@@ -711,6 +717,7 @@ data class MedicationDTO(
 data class CreateMedicationRequest(
     val name: String,
     val unit: String,
+    val price: Int = 0,
     val description: String? = null,
     val defaultDosage: String? = null
 )
@@ -719,6 +726,7 @@ data class CreateMedicationRequest(
 data class UpdateMedicationRequest(
     val name: String? = null,
     val unit: String? = null,
+    val price: Int? = null,
     val description: String? = null,
     val defaultDosage: String? = null,
     val isActive: Boolean? = null
@@ -732,6 +740,8 @@ data class PrescriptionItemDTO(
     val medicationName: String,
     val unit: String,
     val quantity: Int,
+    val unitPrice: Int,
+    val totalPrice: Int,
     val dosageInstruction: String?
 )
 
@@ -746,7 +756,11 @@ data class PrescriptionDTO(
     val diagnosis: String?,
     val advice: String?,
     val followUpDate: String?,
+    val serviceName: String?,
+    val servicePrice: Int,
     val items: List<PrescriptionItemDTO>,
+    val totalMedicationPrice: Int,
+    val totalAmount: Int,
     val createdAt: String
 )
 

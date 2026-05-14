@@ -8,24 +8,14 @@ export interface User {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  doctorId?: string;
 }
 
 // Auth types
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface LoginResponse {
-  token: string;
-  user: User;
-}
-
-export interface RegisterRequest {
-  email: string;
-  password: string;
-  fullName: string;
-  phone?: string;
+export interface AuthState {
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
 }
 
 // Health Record types
@@ -35,7 +25,7 @@ export interface HealthRecord {
   fullName: string;
   dateOfBirth: string;
   ethnicity?: string;
-  gender: "male" | "female" | "other";
+  gender: string;
   occupation?: string;
   phone: string;
   email: string;
@@ -46,21 +36,6 @@ export interface HealthRecord {
   dentalStatus?: string;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface CreateHealthRecordRequest {
-  fullName: string;
-  dateOfBirth: string;
-  ethnicity?: string;
-  gender: "male" | "female" | "other";
-  occupation?: string;
-  phone: string;
-  email: string;
-  nationalId?: string;
-  address: string;
-  allergyNotes?: string;
-  medicalHistory?: string;
-  dentalStatus?: string;
 }
 
 // Specialty types
@@ -69,33 +44,31 @@ export interface Specialty {
   name: string;
   description?: string;
   isActive: boolean;
-  doctorCount?: number;
+  doctorCount: number;
   createdAt: string;
   updatedAt: string;
 }
 
 // Doctor types
-// DoctorSummary is used in appointments (from backend DoctorSummaryDTO)
+export interface Doctor {
+  id: string;
+  userId: string;
+  user: User;
+  specialty: Specialty;
+  qualifications?: string;
+  bio?: string;
+  avatar?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DoctorSummary {
   id: string;
   fullName: string;
-  specialtyName: string; // Matches backend DoctorSummaryDTO
-  avatar?: string; // Matches backend DoctorSummaryDTO
-  qualifications?: string; // Matches backend DoctorSummaryDTO
-}
-
-// Doctor is used in doctor management (from backend SupabaseDoctorDTO)
-export interface Doctor {
-  id: string;
-  userId?: string;
-  user?: User;
-  fullName: string;
-  specialty: string; // Matches backend SupabaseDoctorDTO
-  degree?: string; // Matches backend SupabaseDoctorDTO
-  bio?: string;
-  avatarUrl?: string; // Matches backend SupabaseDoctorDTO
-  isActive: boolean;
-  createdAt: string;
+  specialtyName: string;
+  avatar?: string;
+  qualifications?: string;
 }
 
 // Service types
@@ -136,6 +109,7 @@ export interface AppointmentSummary {
   endTime: string;
   status: "pending" | "confirmed" | "completed" | "cancelled";
   serviceName?: string;
+  totalAmount: number;
 }
 
 export interface Appointment {
@@ -149,6 +123,7 @@ export interface Appointment {
   status: "pending" | "confirmed" | "completed" | "cancelled";
   notes?: string;
   cancellationReason?: string;
+  totalAmount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -177,71 +152,24 @@ export interface Notification {
 export interface DashboardStats {
   totalAppointments: number;
   totalPatients: number;
+  totalDoctors: number;
   totalRevenue: string;
+  totalRevenueAllTime: string;
   appointmentsByStatus: Record<string, number>;
   recentAppointments: AppointmentSummary[];
 }
 
-// Filter types
-export interface DoctorFilter {
-  specialtyId?: string;
-  weekday?: string;
-  gender?: string;
-  sessionTime?: "morning" | "afternoon" | "evening";
-  search?: string;
-}
-
-export interface AppointmentFilter {
-  startDate?: string;
-  endDate?: string;
-  doctorId?: string;
-  specialtyId?: string;
-  status?: string;
-  page?: number;
-  pageSize?: number;
-}
-
-// Shift types
-export interface Shift {
+// Weekly Schedule Types
+export interface WeeklySchedule {
   id: string;
-  name: string;
+  doctorId: string;
+  dayOfWeek: number;
+  session: "morning" | "afternoon";
   startTime: string;
   endTime: string;
+  isActive: boolean;
   createdAt: string;
-}
-
-// Holiday types
-export interface Holiday {
-  id: string;
-  date: string;
-  name: string;
-  description?: string;
-  createdAt: string;
-}
-
-// Work Schedule types
-export interface WorkSchedule {
-  id: string;
-  doctor: DoctorSummary;
-  shift: Shift;
-  date: string;
-  slotDuration: number;
-  maxPatientPerSlot: number;
-  timeSlots: TimeSlot[];
-  createdAt: string;
-}
-
-// Leave Request types
-export interface LeaveRequest {
-  id: string;
-  doctor: DoctorSummary;
-  startDate: string;
-  endDate: string;
-  reason: string;
-  status: "pending" | "approved" | "rejected";
-  reviewedBy?: User;
-  reviewedAt?: string;
-  createdAt: string;
+  updatedAt: string;
 }
 
 // Medication types
@@ -249,6 +177,7 @@ export interface Medication {
   id: string;
   name: string;
   unit: string;
+  price: number;
   description?: string;
   defaultDosage?: string;
   isActive: boolean;
@@ -263,6 +192,8 @@ export interface PrescriptionItem {
   medicationName: string;
   unit: string;
   quantity: number;
+  unitPrice: number;
+  totalPrice: number;
   dosageInstruction?: string;
 }
 
@@ -276,7 +207,11 @@ export interface Prescription {
   diagnosis?: string;
   advice?: string;
   followUpDate?: string;
+  serviceName?: string;
+  servicePrice: number;
   items: PrescriptionItem[];
+  totalMedicationPrice: number;
+  totalAmount: number;
   createdAt: string;
 }
 
@@ -289,6 +224,42 @@ export interface CreatePrescriptionRequest {
   items: {
     medicationId: string;
     quantity: number;
-    dosageInstruction?: string;
+    dosageInstruction: string;
   }[];
+}
+
+// Schedule Change Request types
+export interface ScheduleData {
+  dayOfWeek: number;
+  session: "morning" | "afternoon";
+  startTime: string;
+  endTime: string;
+}
+
+export interface ScheduleChangeRequest {
+  id: string;
+  doctorId: string;
+  doctorName: string;
+  requestType: "add" | "remove" | "modify";
+  oldScheduleData: ScheduleData | null;
+  newScheduleData: ScheduleData | null;
+  status: "pending" | "approved" | "rejected";
+  rejectionReason: string | null;
+  reviewedBy: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
+
+// Leave Request types
+export interface LeaveRequest {
+  id: string;
+  doctor: DoctorSummary;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  reviewedBy?: User;
+  reviewedAt?: string;
+  createdAt: string;
 }

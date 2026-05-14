@@ -95,6 +95,9 @@ export default function AppointmentsPage() {
                   Bác sĩ
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Dịch vụ
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Ngày khám
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -102,6 +105,9 @@ export default function AppointmentsPage() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Trạng thái
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Tổng tiền
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Thao tác
@@ -126,6 +132,11 @@ export default function AppointmentsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
+                      {appointment.service?.name || "-"}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
                       {new Date(appointment.appointmentDate).toLocaleDateString(
                         "vi-VN",
                       )}
@@ -139,6 +150,14 @@ export default function AppointmentsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(appointment.status)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-semibold text-gray-900">
+                      {new Intl.NumberFormat("vi-VN", {
+                        style: "currency",
+                        currency: "VND",
+                      }).format(appointment.totalAmount)}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button

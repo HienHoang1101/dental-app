@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { X, Plus, Trash2, Printer, Save, Search, Pill } from "lucide-react";
 import { doctorApi } from "@/lib/doctorApi";
 import { Medication, Prescription, Appointment } from "@/types";
@@ -27,10 +27,8 @@ export default function PrescriptionModal({
     diagnosis: "",
     advice: "",
     followUpDate: "",
-    items: [] as { medicationId: string; name: string; unit: string; quantity: number; dosageInstruction: string }[],
+    items: [] as { medicationId: string; name: string; unit: string; quantity: number; unitPrice: number; dosageInstruction: string }[],
   });
-
-  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadData();
@@ -39,11 +37,9 @@ export default function PrescriptionModal({
   const loadData = async () => {
     try {
       setLoading(true);
-      // Load medications for selection
       const meds = await doctorApi.getMedications(true);
       setMedications(meds);
 
-      // Check if prescription already exists
       const existing = await doctorApi.getPrescriptionByAppointment(appointment.id);
       if (existing) {
         setPrescription(existing);
@@ -56,6 +52,7 @@ export default function PrescriptionModal({
             name: item.medicationName,
             unit: item.unit,
             quantity: item.quantity,
+            unitPrice: item.unitPrice,
             dosageInstruction: item.dosageInstruction || "",
           })),
         });
@@ -82,6 +79,7 @@ export default function PrescriptionModal({
           name: med.name,
           unit: med.unit,
           quantity: 1,
+          unitPrice: med.price,
           dosageInstruction: med.defaultDosage || "",
         },
       ],
@@ -134,13 +132,171 @@ export default function PrescriptionModal({
     }
   };
 
+  const escapeHtml = (value?: string | null) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+  const formatDate = (date?: string) =>
+    date ? new Date(date).toLocaleDateString("vi-VN") : "-";
+
   const handlePrint = () => {
-    window.print();
+    if (!prescription) return;
+
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) {
+      toast.error("Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup.");
+      return;
+    }
+
+    const formatCurrency = (value: number) =>
+      new Intl.NumberFormat("vi-VN", {
+        style: "currency",
+        currency: "VND",
+      }).format(value || 0);
+
+    const medicineRows = prescription.items.length
+      ? prescription.items
+          .map(
+            (item, index) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td style="font-weight: bold;">${escapeHtml(item.medicationName)}</td>
+                <td style="text-align: center;">${item.quantity} ${escapeHtml(item.unit)}</td>
+                <td style="text-align: right;">${formatCurrency(item.unitPrice)}</td>
+                <td style="text-align: right; font-weight: bold;">${formatCurrency(item.totalPrice)}</td>
+                <td style="font-style: italic;">${escapeHtml(item.dosageInstruction || "-")}</td>
+              </tr>`,
+          )
+          .join("")
+      : `<tr><td colspan="6" style="text-align: center; color: #6b7280;">Không có thông tin thuốc</td></tr>`;
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>Đơn thuốc ${prescription.id.substring(0, 8).toUpperCase()}</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #111827; margin: 32px; line-height: 1.5; }
+            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #1e40af; padding-bottom: 16px; margin-bottom: 24px; }
+            .clinic-info h1 { margin: 0; font-size: 20px; color: #1e40af; text-transform: uppercase; }
+            .clinic-info p { margin: 2px 0; font-size: 12px; color: #4b5563; }
+            .doc-info { text-align: right; font-size: 13px; }
+            .title { text-align: center; margin: 32px 0; }
+            .title h2 { margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 2px; }
+            .patient-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 32px; margin-bottom: 24px; }
+            .patient-info div { font-size: 14px; }
+            .label { font-weight: bold; }
+            table { width: 100%; border-collapse: collapse; margin: 24px 0; }
+            th, td { border: 1px solid #d1d5db; padding: 10px; text-align: left; }
+            th { background: #f3f4f6; font-size: 12px; text-transform: uppercase; }
+            .totals { width: 320px; margin-left: auto; margin-top: 16px; }
+            .totals div { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+            .totals .grand { border-top: 2px solid #111827; margin-top: 8px; padding-top: 8px; font-size: 16px; font-weight: bold; }
+            .footer { margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; }
+            .advice-section { font-size: 14px; }
+            .signature { text-align: center; }
+            .signature-space { height: 80px; }
+            @media print { body { margin: 20px; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="clinic-info">
+              <h1>Phòng khám Nha khoa</h1>
+              <p>Địa chỉ: 123 Đường ABC, Quận XYZ, TP. Hồ Chí Minh</p>
+              <p>Hotline: 1900 1234 - Website: nhakhoa-antigravity.vn</p>
+            </div>
+            <div class="doc-info">
+              <p><strong>Mã đơn:</strong> ${prescription.id.substring(0, 8).toUpperCase()}</p>
+              <p><strong>Ngày:</strong> ${formatDate(prescription.createdAt)}</p>
+            </div>
+          </div>
+
+          <div class="title">
+            <h2>Đơn Thuốc</h2>
+          </div>
+
+          <div class="patient-info">
+            <div><span class="label">Bệnh nhân:</span> ${escapeHtml(prescription.patientName)}</div>
+            <div><span class="label">Chẩn đoán:</span> ${escapeHtml(prescription.diagnosis || "-")}</div>
+            <div><span class="label">Bác sĩ:</span> ${escapeHtml(prescription.doctorName)}</div>
+            <div><span class="label">Ngày tái khám:</span> ${formatDate(prescription.followUpDate)}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px;">STT</th>
+                <th>Tên thuốc / Hàm lượng</th>
+                <th style="width: 80px; text-align: center;">SL</th>
+                <th style="width: 120px; text-align: right;">Đơn giá</th>
+                <th style="width: 120px; text-align: right;">Thành tiền</th>
+                <th>Cách dùng</th>
+              </tr>
+            </thead>
+            <tbody>${medicineRows}</tbody>
+          </table>
+
+          <div class="totals">
+            <div>
+              <span>Tiền dịch vụ:</span>
+              <span>${formatCurrency(prescription.servicePrice)}</span>
+            </div>
+            <div>
+              <span>Tổng tiền thuốc:</span>
+              <span>${formatCurrency(prescription.totalMedicationPrice)}</span>
+            </div>
+            <div class="grand">
+              <span>Tổng cộng:</span>
+              <span>${formatCurrency(prescription.totalAmount)}</span>
+            </div>
+          </div>
+
+          <div class="footer">
+            <div class="advice-section">
+              <p><strong>Lời dặn:</strong></p>
+              <p style="font-style: italic;">${escapeHtml(prescription.advice || "Khám lại sau khi hết thuốc hoặc có dấu hiệu bất thường.")}</p>
+            </div>
+            <div class="signature">
+              <p>Ngày ${new Date().toLocaleDateString("vi-VN")}</p>
+              <p><strong>Bác sĩ điều trị</strong></p>
+              <div class="signature-space"></div>
+              <p><strong>${escapeHtml(prescription.doctorName)}</strong></p>
+            </div>
+          </div>
+
+          <script>
+            window.onload = () => {
+              window.print();
+              window.onafterprint = () => window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const filteredMeds = medications.filter(m => 
     m.name.toLowerCase().includes(searchTerm.toLowerCase())
   ).slice(0, 5);
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+    }).format(value || 0);
+
+  const medicationTotal = formData.items.reduce(
+    (total, item) => total + item.quantity * item.unitPrice,
+    0,
+  );
+  const servicePrice = Number(appointment.service?.price || 0);
+  const totalAmount = servicePrice + medicationTotal;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
@@ -148,7 +304,7 @@ export default function PrescriptionModal({
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div>
-            <h2 className="text-xl font-bold text-gray-800">Đơn thuốc</h2>
+            <h2 className="text-xl font-bold text-gray-800">Kê đơn thuốc</h2>
             <p className="text-sm text-gray-500">Bệnh nhân: {appointment.patient.fullName}</p>
           </div>
           <div className="flex items-center space-x-2">
@@ -235,7 +391,9 @@ export default function PrescriptionModal({
                         >
                           <div>
                             <div className="font-medium">{med.name}</div>
-                            <div className="text-xs text-gray-500">{med.unit}</div>
+                            <div className="text-xs text-gray-500">
+                              {med.unit} • {formatCurrency(med.price)}
+                            </div>
                           </div>
                           <Plus className="w-4 h-4 text-blue-600" />
                         </button>
@@ -254,6 +412,8 @@ export default function PrescriptionModal({
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tên thuốc</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-24">SL</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-32">Đơn giá</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-32">Thành tiền</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Hướng dẫn sử dụng</th>
                       <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-16"></th>
                     </tr>
@@ -261,7 +421,7 @@ export default function PrescriptionModal({
                   <tbody className="divide-y divide-gray-200">
                     {formData.items.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-gray-400 italic">
+                        <td colSpan={6} className="px-4 py-8 text-center text-gray-400 italic">
                           Chưa có thuốc nào trong đơn
                         </td>
                       </tr>
@@ -280,6 +440,12 @@ export default function PrescriptionModal({
                               onChange={(e) => handleUpdateItem(index, "quantity", parseInt(e.target.value) || 1)}
                               className="w-full px-2 py-1 border border-gray-300 rounded"
                             />
+                          </td>
+                          <td className="px-4 py-2 text-right text-sm font-medium text-gray-700">
+                            {formatCurrency(item.unitPrice)}
+                          </td>
+                          <td className="px-4 py-2 text-right text-sm font-semibold text-gray-900">
+                            {formatCurrency(item.unitPrice * item.quantity)}
                           </td>
                           <td className="px-4 py-2">
                             <input
@@ -304,6 +470,22 @@ export default function PrescriptionModal({
                     )}
                   </tbody>
                 </table>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <div className="w-full max-w-sm space-y-2 rounded-lg border border-gray-200 bg-white p-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Tiền dịch vụ</span>
+                    <span className="font-medium">{formatCurrency(servicePrice)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Tổng tiền thuốc</span>
+                    <span className="font-medium">{formatCurrency(medicationTotal)}</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2 text-base font-bold text-gray-900">
+                    <span>Tổng cộng</span>
+                    <span>{formatCurrency(totalAmount)}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </form>
@@ -333,88 +515,6 @@ export default function PrescriptionModal({
           </button>
         </div>
       </div>
-
-      {/* Hidden Print Template */}
-      <div className="hidden print:block fixed inset-0 bg-white z-[100] p-8 text-black" style={{ fontSize: '14px' }}>
-        <div className="max-w-3xl mx-auto border p-8">
-          <div className="flex justify-between items-start mb-8">
-            <div>
-              <h1 className="text-2xl font-bold uppercase text-blue-800">Phòng khám Nha khoa Antigravity</h1>
-              <p>Địa chỉ: 123 Đường ABC, Quận XYZ, TP. Hồ Chí Minh</p>
-              <p>Hotline: 1900 1234 - Website: nhakhoa-antigravity.vn</p>
-            </div>
-            <div className="text-right">
-              <p className="font-bold">Mã đơn: {prescription?.id.substring(0, 8).toUpperCase()}</p>
-              <p>Ngày: {new Date().toLocaleDateString("vi-VN")}</p>
-            </div>
-          </div>
-
-          <h2 className="text-3xl font-bold text-center mb-8 uppercase">Đơn Thuốc</h2>
-
-          <div className="grid grid-cols-2 gap-y-2 mb-6">
-            <p><span className="font-bold">Họ và tên bệnh nhân:</span> {appointment.patient.fullName}</p>
-            <p><span className="font-bold">Ngày sinh:</span> {appointment.healthRecord?.dateOfBirth || "N/A"}</p>
-            <p><span className="font-bold">Địa chỉ:</span> {appointment.healthRecord?.address || "N/A"}</p>
-            <p><span className="font-bold">Chẩn đoán:</span> {formData.diagnosis}</p>
-          </div>
-
-          <table className="w-full border-collapse mb-8">
-            <thead>
-              <tr className="border-b-2 border-black">
-                <th className="py-2 text-left w-12">STT</th>
-                <th className="py-2 text-left">Tên thuốc / Hàm lượng</th>
-                <th className="py-2 text-center w-24">Số lượng</th>
-                <th className="py-2 text-left">Cách dùng</th>
-              </tr>
-            </thead>
-            <tbody>
-              {formData.items.map((item, index) => (
-                <tr key={index} className="border-b border-gray-200">
-                  <td className="py-3 text-left">{index + 1}</td>
-                  <td className="py-3 text-left font-bold">{item.name}</td>
-                  <td className="py-3 text-center">{item.quantity} {item.unit}</td>
-                  <td className="py-3 text-left italic">{item.dosageInstruction}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="mb-8">
-            <p><span className="font-bold italic underline">Lời dặn:</span> {formData.advice || "Khám lại sau khi hết thuốc hoặc có dấu hiệu bất thường."}</p>
-            {formData.followUpDate && (
-              <p className="font-bold text-red-600 mt-2">Hẹn tái khám: {new Date(formData.followUpDate).toLocaleDateString("vi-VN")}</p>
-            )}
-          </div>
-
-          <div className="flex justify-end mt-12">
-            <div className="text-center w-64">
-              <p className="mb-20">Bác sĩ điều trị</p>
-              <p className="font-bold text-lg">{appointment.doctor.fullName}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <style jsx global>{`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          .print\:block, .print\:block * {
-            visibility: visible;
-          }
-          .print\:block {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
-          @page {
-            size: A4;
-            margin: 0;
-          }
-        }
-      `}</style>
     </div>
   );
 }

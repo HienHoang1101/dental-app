@@ -159,6 +159,12 @@ object Appointments : Table("appointments") {
     val updatedAt       = timestamp("updated_at").clientDefault { Instant.now() }
 
     override val primaryKey = PrimaryKey(id)
+
+    init {
+        index(false, doctorId, appointmentDate)
+        index(false, patientId, appointmentDate)
+        index(false, status)
+    }
 }
 
 // ── LEAVE REQUESTS ───────────────────────────────
@@ -195,6 +201,7 @@ object Medications : Table("medications") {
     val id            = uuid("id").autoGenerate()
     val name          = text("name")
     val unit          = text("unit")
+    val price         = integer("price").default(0)
     val description   = text("description").nullable()
     val defaultDosage = text("default_dosage").nullable()
     val isActive      = bool("is_active").default(true)
@@ -224,6 +231,7 @@ object PrescriptionItems : Table("prescription_items") {
     val prescriptionId    = uuid("prescription_id").references(Prescriptions.id)
     val medicationId      = uuid("medication_id").references(Medications.id)
     val quantity          = integer("quantity")
+    val unitPrice         = integer("unit_price").default(0)
     val dosageInstruction = text("dosage_instruction").nullable()
     val createdAt         = timestamp("created_at").clientDefault { Instant.now() }
 

@@ -16,6 +16,7 @@ export default function MedicationsPage() {
   const [formData, setFormData] = useState({
     name: "",
     unit: "",
+    price: "",
     description: "",
     defaultDosage: "",
     isActive: true,
@@ -42,6 +43,7 @@ export default function MedicationsPage() {
       setFormData({
         name: medication.name,
         unit: medication.unit,
+        price: String(medication.price || 0),
         description: medication.description || "",
         defaultDosage: medication.defaultDosage || "",
         isActive: medication.isActive,
@@ -51,6 +53,7 @@ export default function MedicationsPage() {
       setFormData({
         name: "",
         unit: "Viên",
+        price: "",
         description: "",
         defaultDosage: "",
         isActive: true,
@@ -62,11 +65,16 @@ export default function MedicationsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload = {
+        ...formData,
+        price: Number(formData.price) || 0,
+      };
+
       if (editingMedication) {
-        await adminApi.updateMedication(editingMedication.id, formData);
+        await adminApi.updateMedication(editingMedication.id, payload);
         toast.success("Cập nhật thuốc thành công");
       } else {
-        await adminApi.createMedication(formData);
+        await adminApi.createMedication(payload);
         toast.success("Thêm thuốc mới thành công");
       }
       setIsModalOpen(false);
@@ -90,6 +98,12 @@ export default function MedicationsPage() {
   const filteredMedications = medications.filter((m) =>
     m.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+    }).format(value || 0);
 
   return (
     <AdminLayout>
@@ -130,6 +144,9 @@ export default function MedicationsPage() {
                     Đơn vị
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Giá
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Liều dùng mặc định
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -143,13 +160,13 @@ export default function MedicationsPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center">
+                    <td colSpan={6} className="px-6 py-8 text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                     </td>
                   </tr>
                 ) : filteredMedications.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                       Không tìm thấy thuốc nào
                     </td>
                   </tr>
@@ -162,6 +179,9 @@ export default function MedicationsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {medication.unit}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        {formatCurrency(medication.price)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {medication.defaultDosage || "-"}
@@ -233,6 +253,19 @@ export default function MedicationsPage() {
                   <option value="Ống">Ống</option>
                   <option value="Tuýp">Tuýp</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Giá thuốc *</label>
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  placeholder="Ví dụ: 25000"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Liều dùng mặc định</label>

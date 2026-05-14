@@ -23,6 +23,7 @@ object PrescriptionService {
         val id = Medications.insert {
             it[name] = request.name
             it[unit] = request.unit
+            it[price] = request.price
             it[description] = request.description
             it[defaultDosage] = request.defaultDosage
             it[isActive] = true
@@ -39,6 +40,7 @@ object PrescriptionService {
         Medications.update({ Medications.id eq id }) {
             request.name?.let { n -> it[name] = n }
             request.unit?.let { u -> it[unit] = u }
+            request.price?.let { p -> it[price] = p }
             request.description?.let { d -> it[description] = d }
             request.defaultDosage?.let { dd -> it[defaultDosage] = dd }
             request.isActive?.let { a -> it[isActive] = a }
@@ -64,10 +66,17 @@ object PrescriptionService {
         } get Prescriptions.id
 
         request.items.forEach { item ->
+            val medicationId = UUID.fromString(item.medicationId)
+            val medicationPrice = Medications.select { Medications.id eq medicationId }
+                .singleOrNull()
+                ?.get(Medications.price)
+                ?: throw IllegalArgumentException("Medication not found: ${item.medicationId}")
+
             PrescriptionItems.insert {
                 it[this.prescriptionId] = prescriptionId
-                it[medicationId] = UUID.fromString(item.medicationId)
+                it[this.medicationId] = medicationId
                 it[quantity] = item.quantity
+                it[unitPrice] = medicationPrice
                 it[dosageInstruction] = item.dosageInstruction
                 it[createdAt] = Instant.now()
             }
@@ -84,19 +93,33 @@ object PrescriptionService {
                 val items = PrescriptionItems.join(Medications, JoinType.INNER, PrescriptionItems.medicationId, Medications.id)
                     .select { PrescriptionItems.prescriptionId eq id }
                     .map { itemRow ->
+                        val quantity = itemRow[PrescriptionItems.quantity]
+                        val unitPrice = itemRow[PrescriptionItems.unitPrice].takeIf { it > 0 }
+                            ?: itemRow[Medications.price]
                         PrescriptionItemDTO(
                             id = itemRow[PrescriptionItems.id].toString(),
                             medicationId = itemRow[Medications.id].toString(),
                             medicationName = itemRow[Medications.name],
                             unit = itemRow[Medications.unit],
-                            quantity = itemRow[PrescriptionItems.quantity],
+                            quantity = quantity,
+                            unitPrice = unitPrice,
+                            totalPrice = unitPrice * quantity,
                             dosageInstruction = itemRow[PrescriptionItems.dosageInstruction]
                         )
                     }
+                val appointmentId = row[Prescriptions.appointmentId]
+                val appointmentService = appointmentId?.let { apptId ->
+                    Appointments.leftJoin(Services, { Appointments.serviceId }, { Services.id })
+                        .select { Appointments.id eq apptId }
+                        .singleOrNull()
+                }
+                val serviceName = appointmentService?.getOrNull(Services.name)
+                val servicePrice = appointmentService?.getOrNull(Services.price) ?: 0
+                val totalMedicationPrice = items.sumOf { it.totalPrice }
 
                 PrescriptionDTO(
                     id = row[Prescriptions.id].toString(),
-                    appointmentId = row[Prescriptions.appointmentId]?.toString(),
+                    appointmentId = appointmentId?.toString(),
                     patientId = row[Prescriptions.patientId].toString(),
                     patientName = row[Users.fullName],
                     doctorId = row[Prescriptions.doctorId].toString(),
@@ -104,7 +127,11 @@ object PrescriptionService {
                     diagnosis = row[Prescriptions.diagnosis],
                     advice = row[Prescriptions.advice],
                     followUpDate = row[Prescriptions.followUpDate]?.toString(),
+                    serviceName = serviceName,
+                    servicePrice = servicePrice,
                     items = items,
+                    totalMedicationPrice = totalMedicationPrice,
+                    totalAmount = servicePrice + totalMedicationPrice,
                     createdAt = row[Prescriptions.createdAt].toString()
                 )
             }.singleOrNull()
@@ -127,6 +154,7 @@ object PrescriptionService {
         id = row[Medications.id].toString(),
         name = row[Medications.name],
         unit = row[Medications.unit],
+        price = row[Medications.price],
         description = row[Medications.description],
         defaultDosage = row[Medications.defaultDosage],
         isActive = row[Medications.isActive],

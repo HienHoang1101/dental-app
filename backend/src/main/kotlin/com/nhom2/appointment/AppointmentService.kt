@@ -357,51 +357,88 @@ object AppointmentService {
 
     fun getAppointmentById(id: UUID): AppointmentDTO? {
         return transaction {
-            val appointment = Appointments.select { Appointments.id eq id }
-                .singleOrNull() ?: return@transaction null
+            val patientAlias = Users.alias("patient_users")
+            val join = Appointments
+                .innerJoin(patientAlias, { patientId }, { patientAlias[Users.id] })
+                .innerJoin(SupabaseDoctors, { Appointments.doctorId }, { SupabaseDoctors.id })
+                .innerJoin(HealthRecords, { Appointments.healthRecordId }, { HealthRecords.id })
+                .leftJoin(TimeSlots)
+                .leftJoin(Services)
 
-            appointment.toAppointmentDTO()
+            join.select { Appointments.id eq id }
+                .map { it.toAppointmentDTOJoined(patientAlias) }
+                .singleOrNull()
         }
     }
     
     fun getAppointmentByIdV2(id: UUID): AppointmentDTOV2? {
         return transaction {
-            val appointment = Appointments.select { Appointments.id eq id }
-                .singleOrNull() ?: return@transaction null
+            val patientAlias = Users.alias("patient_users")
+            val join = Appointments
+                .innerJoin(patientAlias, { patientId }, { patientAlias[Users.id] })
+                .innerJoin(SupabaseDoctors, { Appointments.doctorId }, { SupabaseDoctors.id })
+                .innerJoin(HealthRecords, { Appointments.healthRecordId }, { HealthRecords.id })
+                .leftJoin(Services)
 
-            appointment.toAppointmentDTOV2()
+            join.select { Appointments.id eq id }
+                .map { it.toAppointmentDTOV2Joined(patientAlias) }
+                .singleOrNull()
         }
     }
 
     fun getAppointmentsByPatient(patientId: UUID, status: String? = null): List<AppointmentDTO> {
         return transaction {
-            var query = Appointments.select { Appointments.patientId eq patientId }
+            val patientAlias = Users.alias("patient_users")
+            val join = Appointments
+                .innerJoin(patientAlias, { Appointments.patientId }, { patientAlias[Users.id] })
+                .innerJoin(SupabaseDoctors, { Appointments.doctorId }, { SupabaseDoctors.id })
+                .innerJoin(HealthRecords, { Appointments.healthRecordId }, { HealthRecords.id })
+                .leftJoin(TimeSlots)
+                .leftJoin(Services)
+
+            var query = join.select { Appointments.patientId eq patientId }
             
             status?.let {
                 query = query.andWhere { Appointments.status eq it }
             }
 
             query.orderBy(Appointments.appointmentDate to SortOrder.DESC)
-                .map { it.toAppointmentDTO() }
+                .map { it.toAppointmentDTOJoined(patientAlias) }
         }
     }
 
     fun getAppointmentsByDoctor(doctorId: UUID, status: String? = null): List<AppointmentDTO> {
         return transaction {
-            var query = Appointments.select { Appointments.doctorId eq doctorId }
+            val patientAlias = Users.alias("patient_users")
+            val join = Appointments
+                .innerJoin(patientAlias, { Appointments.patientId }, { patientAlias[Users.id] })
+                .innerJoin(SupabaseDoctors, { Appointments.doctorId }, { SupabaseDoctors.id })
+                .innerJoin(HealthRecords, { Appointments.healthRecordId }, { HealthRecords.id })
+                .leftJoin(TimeSlots)
+                .leftJoin(Services)
+
+            var query = join.select { Appointments.doctorId eq doctorId }
             
             status?.let {
                 query = query.andWhere { Appointments.status eq it }
             }
 
             query.orderBy(Appointments.appointmentDate to SortOrder.ASC)
-                .map { it.toAppointmentDTO() }
+                .map { it.toAppointmentDTOJoined(patientAlias) }
         }
     }
 
     fun getAllAppointments(filter: AppointmentFilterRequest): PaginatedResponse<AppointmentDTO> {
         return transaction {
-            var query = Appointments.selectAll()
+            val patientAlias = Users.alias("patient_users")
+            val join = Appointments
+                .innerJoin(patientAlias, { Appointments.patientId }, { patientAlias[Users.id] })
+                .innerJoin(SupabaseDoctors, { Appointments.doctorId }, { SupabaseDoctors.id })
+                .innerJoin(HealthRecords, { Appointments.healthRecordId }, { HealthRecords.id })
+                .leftJoin(TimeSlots)
+                .leftJoin(Services)
+
+            var query = join.selectAll()
 
             filter.startDate?.let {
                 query = query.andWhere { Appointments.appointmentDate greaterEq LocalDate.parse(it) }
@@ -423,7 +460,7 @@ object AppointmentService {
             val items = query
                 .orderBy(Appointments.appointmentDate to SortOrder.DESC)
                 .limit(filter.pageSize, offset = ((filter.page - 1) * filter.pageSize).toLong())
-                .map { it.toAppointmentDTO() }
+                .map { it.toAppointmentDTOJoined(patientAlias) }
 
             PaginatedResponse(
                 items = items,
@@ -484,6 +521,18 @@ object AppointmentService {
         )
     }
 
+    private fun calculateMedicationTotal(appointmentId: UUID): Int {
+        return Prescriptions
+            .innerJoin(PrescriptionItems)
+            .innerJoin(Medications)
+            .select { Prescriptions.appointmentId eq appointmentId }
+            .sumOf { row ->
+                val unitPrice = row[PrescriptionItems.unitPrice].takeIf { it > 0 }
+                    ?: row[Medications.price]
+                unitPrice * row[PrescriptionItems.quantity]
+            }
+    }
+
     private fun ResultRow.toAppointmentDTO(): AppointmentDTO {
         val patientId = this[Appointments.patientId]
         val doctorId = this[Appointments.doctorId]
@@ -520,6 +569,7 @@ object AppointmentService {
             status = this[Appointments.status],
             notes = this[Appointments.notes],
             cancellationReason = this[Appointments.cancellationReason],
+            totalAmount = (service?.price?.toIntOrNull() ?: 0) + calculateMedicationTotal(this[Appointments.id]),
             createdAt = this[Appointments.createdAt].toString(),
             updatedAt = this[Appointments.updatedAt].toString()
         )
@@ -548,8 +598,180 @@ object AppointmentService {
             status = this[Appointments.status],
             notes = this[Appointments.notes],
             cancellationReason = this[Appointments.cancellationReason],
+            totalAmount = (service?.price?.toIntOrNull() ?: 0) + calculateMedicationTotal(this[Appointments.id]),
             parentAppointmentId = this[Appointments.parentAppointmentId]?.toString(),
             isFollowUp = this[Appointments.parentAppointmentId] != null,
+            createdAt = this[Appointments.createdAt].toString(),
+            updatedAt = this[Appointments.updatedAt].toString()
+        )
+    }
+
+    private fun ResultRow.toAppointmentDTOJoined(patientAlias: Alias<Users>): AppointmentDTO {
+        val patient = UserDTO(
+            id = this[patientAlias[Users.id]].toString(),
+            email = this[patientAlias[Users.email]],
+            fullName = this[patientAlias[Users.fullName]],
+            phone = this[patientAlias[Users.phone]],
+            role = this[patientAlias[Users.role]],
+            isActive = this[patientAlias[Users.isActive]],
+            createdAt = this[patientAlias[Users.createdAt]].toString(),
+            updatedAt = this[patientAlias[Users.updatedAt]].toString()
+        )
+
+        val doctorSummary = DoctorSummaryDTO(
+            id = this[SupabaseDoctors.id].toString(),
+            fullName = this[SupabaseDoctors.fullName],
+            specialtyName = this[SupabaseDoctors.specialty],
+            avatar = this[SupabaseDoctors.avatarUrl],
+            qualifications = this[SupabaseDoctors.degree]
+        )
+
+        val healthRecordDTO = HealthRecordDTO(
+            id = this[HealthRecords.id].toString(),
+            userId = this[HealthRecords.userId].toString(),
+            fullName = this[HealthRecords.fullName],
+            dateOfBirth = this[HealthRecords.dateOfBirth].toString(),
+            ethnicity = this[HealthRecords.ethnicity],
+            gender = this[HealthRecords.gender],
+            occupation = this[HealthRecords.occupation],
+            phone = this[HealthRecords.phone],
+            email = this[HealthRecords.email],
+            nationalId = this[HealthRecords.nationalId],
+            address = this[HealthRecords.address],
+            allergyNotes = this[HealthRecords.allergyNotes],
+            medicalHistory = this[HealthRecords.medicalHistory],
+            dentalStatus = this[HealthRecords.dentalStatus],
+            createdAt = this[HealthRecords.createdAt].toString(),
+            updatedAt = this[HealthRecords.updatedAt].toString()
+        )
+
+        val timeSlotDTO = if (this.getOrNull(TimeSlots.id) != null) {
+            TimeSlotDTO(
+                id = this[TimeSlots.id].toString(),
+                workScheduleId = this[TimeSlots.workScheduleId].toString(),
+                startTime = this[TimeSlots.startTime].toString(),
+                endTime = this[TimeSlots.endTime].toString(),
+                maxPatientPerSlot = this[TimeSlots.maxPatientPerSlot],
+                currentBookings = 0,
+                remainingCapacity = this[TimeSlots.maxPatientPerSlot],
+                isAvailable = true,
+                createdAt = this[TimeSlots.createdAt].toString()
+            )
+        } else {
+            TimeSlotDTO(
+                id = "",
+                workScheduleId = "",
+                startTime = this[Appointments.startTime]?.toString() ?: "",
+                endTime = this[Appointments.endTime]?.toString() ?: "",
+                maxPatientPerSlot = 1,
+                currentBookings = 0,
+                remainingCapacity = 1,
+                isAvailable = false,
+                createdAt = ""
+            )
+        }
+
+        val service = if (this.getOrNull(Services.id) != null) {
+            ServiceDTO(
+                id = this[Services.id].toString(),
+                name = this[Services.name],
+                description = this[Services.description],
+                price = this[Services.price].toString(),
+                duration = this[Services.duration],
+                category = this[Services.category],
+                specialtyId = this[Services.specialtyId]?.toString(),
+                isActive = this[Services.isActive],
+                createdAt = this[Services.createdAt].toString(),
+                updatedAt = null
+            )
+        } else null
+
+        return AppointmentDTO(
+            id = this[Appointments.id].toString(),
+            patient = patient,
+            doctor = doctorSummary,
+            healthRecord = healthRecordDTO,
+            timeSlot = timeSlotDTO,
+            service = service,
+            appointmentDate = this[Appointments.appointmentDate].toString(),
+            status = this[Appointments.status],
+            notes = this[Appointments.notes],
+            cancellationReason = this[Appointments.cancellationReason],
+            totalAmount = (service?.price?.toIntOrNull() ?: 0) + calculateMedicationTotal(this[Appointments.id]),
+            createdAt = this[Appointments.createdAt].toString(),
+            updatedAt = this[Appointments.updatedAt].toString()
+        )
+    }
+
+    private fun ResultRow.toAppointmentDTOV2Joined(patientAlias: Alias<Users>): AppointmentDTOV2 {
+        val patient = UserDTO(
+            id = this[patientAlias[Users.id]].toString(),
+            email = this[patientAlias[Users.email]],
+            fullName = this[patientAlias[Users.fullName]],
+            phone = this[patientAlias[Users.phone]],
+            role = this[patientAlias[Users.role]],
+            isActive = this[patientAlias[Users.isActive]],
+            createdAt = this[patientAlias[Users.createdAt]].toString(),
+            updatedAt = this[patientAlias[Users.updatedAt]].toString()
+        )
+
+        val doctorSummary = DoctorSummaryDTO(
+            id = this[SupabaseDoctors.id].toString(),
+            fullName = this[SupabaseDoctors.fullName],
+            specialtyName = this[SupabaseDoctors.specialty],
+            avatar = this[SupabaseDoctors.avatarUrl],
+            qualifications = this[SupabaseDoctors.degree]
+        )
+
+        val healthRecordDTO = HealthRecordDTO(
+            id = this[HealthRecords.id].toString(),
+            userId = this[HealthRecords.userId].toString(),
+            fullName = this[HealthRecords.fullName],
+            dateOfBirth = this[HealthRecords.dateOfBirth].toString(),
+            ethnicity = this[HealthRecords.ethnicity],
+            gender = this[HealthRecords.gender],
+            occupation = this[HealthRecords.occupation],
+            phone = this[HealthRecords.phone],
+            email = this[HealthRecords.email],
+            nationalId = this[HealthRecords.nationalId],
+            address = this[HealthRecords.address],
+            allergyNotes = this[HealthRecords.allergyNotes],
+            medicalHistory = this[HealthRecords.medicalHistory],
+            dentalStatus = this[HealthRecords.dentalStatus],
+            createdAt = this[HealthRecords.createdAt].toString(),
+            updatedAt = this[HealthRecords.updatedAt].toString()
+        )
+
+        val service = if (this.getOrNull(Services.id) != null) {
+            ServiceDTO(
+                id = this[Services.id].toString(),
+                name = this[Services.name],
+                description = this[Services.description],
+                price = this[Services.price].toString(),
+                duration = this[Services.duration],
+                category = this[Services.category],
+                specialtyId = this[Services.specialtyId]?.toString(),
+                isActive = this[Services.isActive],
+                createdAt = this[Services.createdAt].toString(),
+                updatedAt = null
+            )
+        } else null
+
+        return AppointmentDTOV2(
+            id = this[Appointments.id].toString(),
+            patient = patient,
+            doctor = doctorSummary,
+            healthRecord = healthRecordDTO,
+            service = service,
+            startTime = this[Appointments.startTime]?.toString(),
+            endTime = this[Appointments.endTime]?.toString(),
+            appointmentDate = this[Appointments.appointmentDate].toString(),
+            status = this[Appointments.status],
+            notes = this[Appointments.notes],
+            cancellationReason = this[Appointments.cancellationReason],
+            parentAppointmentId = this[Appointments.parentAppointmentId]?.toString(),
+            isFollowUp = this[Appointments.parentAppointmentId] != null,
+            totalAmount = (service?.price?.toIntOrNull() ?: 0) + calculateMedicationTotal(this[Appointments.id]),
             createdAt = this[Appointments.createdAt].toString(),
             updatedAt = this[Appointments.updatedAt].toString()
         )

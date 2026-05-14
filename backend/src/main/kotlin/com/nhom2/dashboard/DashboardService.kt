@@ -22,8 +22,14 @@ object DashboardService {
             // Total patients (unique users with patient role)
             val totalPatients = Users.select { Users.role eq "patient" }.count().toInt()
 
-            // Total revenue from completed appointments
+            // Total doctors
+            val totalDoctors = Users.select { Users.role eq "doctor" }.count().toInt()
+
+            // Total revenue from completed appointments in range
             val revenue = calculateRevenue(start, end)
+
+            // Total revenue all time
+            val totalRevenueAllTime = calculateRevenue(LocalDate.of(2000, 1, 1), LocalDate.now().plusDays(1))
 
             // Appointments by status
             val appointmentsByStatus = mapOf(
@@ -58,26 +64,44 @@ object DashboardService {
             DashboardStatsDTO(
                 totalAppointments = totalAppointments,
                 totalPatients = totalPatients,
+                totalDoctors = totalDoctors,
                 totalRevenue = revenue.toString(),
+                totalRevenueAllTime = totalRevenueAllTime.toString(),
                 appointmentsByStatus = appointmentsByStatus,
                 recentAppointments = recentAppointments
             )
         }
     }
 
-    private fun calculateRevenue(startDate: LocalDate, endDate: LocalDate): Int {
+    private fun calculateRevenue(startDate: LocalDate, endDate: LocalDate): Long {
         return transaction {
-            val appointments = (Appointments innerJoin Services).select {
-                (Appointments.status eq "completed") and
-                (Appointments.appointmentDate greaterEq startDate) and
-                (Appointments.appointmentDate lessEq endDate) and
-                (Appointments.serviceId.isNotNull())
-            }
+            // Use leftJoin to be more inclusive and handle potentially missing service data
+            val query = Appointments
+                .leftJoin(Services, { Appointments.serviceId }, { Services.id })
+                .select {
+                    (Appointments.status eq "completed") and
+                    (Appointments.appointmentDate greaterEq startDate) and
+                    (Appointments.appointmentDate lessEq endDate)
+                }
 
-            appointments.fold(0) { acc, row ->
-                acc + row[Services.price]
+            query.sumOf { row ->
+                val appointmentId = row[Appointments.id]
+                val servicePrice = row.getOrNull(Services.price)?.toLong() ?: 0L
+                servicePrice + calculateMedicationRevenue(appointmentId)
             }
         }
+    }
+
+    private fun calculateMedicationRevenue(appointmentId: java.util.UUID): Long {
+        return Prescriptions
+            .innerJoin(PrescriptionItems)
+            .innerJoin(Medications)
+            .select { Prescriptions.appointmentId eq appointmentId }
+            .sumOf { row ->
+                val unitPrice = row[PrescriptionItems.unitPrice].takeIf { it > 0 }
+                    ?: row[Medications.price]
+                unitPrice.toLong() * row[PrescriptionItems.quantity].toLong()
+            }
     }
 
     private fun ResultRow.toAppointmentSummaryDTO(): AppointmentSummaryDTO {
@@ -91,6 +115,9 @@ object DashboardService {
         val timeSlot = timeSlotId?.let { TimeSlots.select { TimeSlots.id eq it }.singleOrNull() }
         val service = serviceId?.let { Services.select { Services.id eq it }.singleOrNull() }
 
+        val totalMedicationPrice = calculateMedicationRevenue(this[Appointments.id])
+        val totalAmount = (service?.get(Services.price) ?: 0) + totalMedicationPrice.toInt()
+
         return AppointmentSummaryDTO(
             id = this[Appointments.id].toString(),
             patientName = patient[Users.fullName],
@@ -100,7 +127,8 @@ object DashboardService {
             startTime = timeSlot?.get(TimeSlots.startTime)?.toString() ?: this[Appointments.startTime]?.toString() ?: "",
             endTime = timeSlot?.get(TimeSlots.endTime)?.toString() ?: this[Appointments.endTime]?.toString() ?: "",
             status = this[Appointments.status],
-            serviceName = service?.get(Services.name)
+            serviceName = service?.get(Services.name),
+            totalAmount = totalAmount
         )
     }
 }

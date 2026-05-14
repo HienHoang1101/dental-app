@@ -459,6 +459,7 @@ export const adminApi = {
   createMedication: async (data: {
     name: string;
     unit: string;
+    price: number;
     description?: string;
     defaultDosage?: string;
   }): Promise<Medication> => {
