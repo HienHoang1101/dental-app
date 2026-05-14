@@ -17,8 +17,11 @@ import {
   DollarSign,
   AlertCircle,
   Pill,
+  Printer,
 } from "lucide-react";
 import { formatDateLong, parseLocalDate } from "@/lib/dateUtils";
+import { printPrescription } from "@/lib/prescriptionUtils";
+import { toast } from "react-hot-toast";
 
 export default function AppointmentDetailPage() {
   const router = useRouter();
@@ -437,10 +440,16 @@ export default function AppointmentDetailPage() {
             
             <div className="mt-6 flex justify-end">
               <button 
-                onClick={() => window.print()}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                onClick={() => {
+                  if (prescription) {
+                    printPrescription(prescription);
+                  } else {
+                    toast.error("Không tìm thấy thông tin đơn thuốc để in");
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
               >
-                <FileText className="h-4 w-4" />
+                <Printer className="h-4 w-4" />
                 In đơn thuốc
               </button>
             </div>
