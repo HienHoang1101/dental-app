@@ -226,7 +226,22 @@ fun Route.appointmentRoutes() {
                     )
                 }
             }
-            
+            // Prescription for appointment
+            get("/{id}/prescription") {
+                try {
+                    val id = UUID.fromString(call.parameters["id"])
+                    val prescription = com.nhom2.prescription.PrescriptionService.getPrescriptionByAppointmentId(id)
+                    
+                    if (prescription != null) {
+                        call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = prescription))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(error = "NOT_FOUND", message = "Prescription not found"))
+                    }
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse(error = "SERVER_ERROR", message = e.message ?: "An error occurred"))
+                }
+            }
+
             // ══════════════════════════════════════════════════════════════════════════
             // V2 API - Time-based booking system
             // ══════════════════════════════════════════════════════════════════════════

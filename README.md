@@ -20,13 +20,12 @@ Hệ thống quản lý phòng khám nha khoa toàn diện với 3 actors: Khác
 - ✅ Xem hồ sơ bệnh án của bệnh nhân
 
 ### Quản trị viên (Admin)
-- 🚧 Dashboard thống kê
-- 🚧 Quản lý bệnh nhân & Bác sĩ (CRUD)
-- 🚧 Quản lý lịch hẹn & Dịch vụ
-- 🚧 Duyệt yêu cầu thay đổi lịch làm việc của bác sĩ
-- 🚧 Quản lý người dùng & phân quyền
+- ✅ Dashboard thống kê
+- ✅ Quản lý bệnh nhân & Bác sĩ (CRUD)
+- ✅ Quản lý lịch hẹn & Dịch vụ
+- ✅ Duyệt yêu cầu thay đổi lịch làm việc của bác sĩ
+- ✅ Quản lý người dùng & phân quyền
 
-**Chú thích**: ✅ Đã hoàn thành | 🚧 Đang phát triển
 
 ## 🛠 Tech Stack
 
@@ -164,13 +163,6 @@ Hệ thống sử dụng các bảng chính:
 
 *Chi tiết cấu trúc xem tại `docs/DATABASE_DESIGN.md`*
 
-## 🗺 Roadmap
-
-- [x] **Phase 1: Core System** (Auth, Profiles, Basic UI)
-- [x] **Phase 2: Advanced Scheduling** (Dynamic Time Slots, Weekly Schedules, Booking Flow)
-- [x] **Phase 3: AI Integration** (Chatbot, RAG with medical docs)
-- [ ] **Phase 4: Admin & Management** (Dashboards, Approval Workflows)
-- [ ] **Phase 5: Polish & Optimizations** (Real-time notifications, Mobile Responsiveness)
 
 ## 🤝 Contributing
 1. Fork dự án

@@ -4,6 +4,7 @@ import com.nhom2.common.*
 import com.nhom2.models.*
 import com.nhom2.doctors.SupabaseDoctorService
 import com.nhom2.appointment.AppointmentService
+import com.nhom2.dashboard.DashboardService
 import com.nhom2.utils.PasswordHasher
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -37,25 +38,9 @@ fun Route.adminApiRoutes() {
             // Dashboard stats
             get("/dashboard/stats") {
                 try {
-                    val stats = transaction {
-                        val totalPatients = Users.select { Users.role eq "patient" }.count()
-                        val totalDoctors = Users.select { Users.role eq "doctor" }.count()
-                        val totalAppointments = Appointments.selectAll().count()
-                        val pendingAppointments = Appointments.select { Appointments.status eq "pending" }.count()
-                        val confirmedAppointments = Appointments.select { Appointments.status eq "confirmed" }.count()
-                        val completedAppointments = Appointments.select { Appointments.status eq "completed" }.count()
-                        val cancelledAppointments = Appointments.select { Appointments.status eq "cancelled" }.count()
-
-                        mapOf(
-                            "totalPatients" to totalPatients,
-                            "totalDoctors" to totalDoctors,
-                            "totalAppointments" to totalAppointments,
-                            "pendingAppointments" to pendingAppointments,
-                            "confirmedAppointments" to confirmedAppointments,
-                            "completedAppointments" to completedAppointments,
-                            "cancelledAppointments" to cancelledAppointments
-                        )
-                    }
+                    val startDate = call.request.queryParameters["startDate"]?.let { java.time.LocalDate.parse(it) }
+                    val endDate = call.request.queryParameters["endDate"]?.let { java.time.LocalDate.parse(it) }
+                    val stats = DashboardService.getDashboardStats(startDate, endDate)
                     call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = stats))
                 } catch (e: Exception) {
                     call.respond(

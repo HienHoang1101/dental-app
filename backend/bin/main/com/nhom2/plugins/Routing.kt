@@ -35,6 +35,7 @@ fun Application.configureRouting() {
 
         // Register all routes under /api prefix
         route("/api") {
+            prescriptionRoutes()
             authRoutes()
             patientRoutes()
             healthRecordRoutes()
@@ -47,13 +48,10 @@ fun Application.configureRouting() {
             scheduleRoutes()
             notificationRoutes()
             dashboardRoutes()
-            chatRoutes()  // Chat routes
-            
-            // Phase 1: New schedule system routes
+            chatRoutes()
             weeklyScheduleRoutes()
             scheduleChangeRoutes()
             scheduleExceptionRoutes()
-            prescriptionRoutes()
         }
     }
 }

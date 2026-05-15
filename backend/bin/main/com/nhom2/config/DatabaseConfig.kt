@@ -70,7 +70,10 @@ object DatabaseConfig {
                         TimeSlots,
                         Appointments,
                         LeaveRequests,
-                        Notifications
+                        Notifications,
+                        Medications,
+                        Prescriptions,
+                        PrescriptionItems
                     )
                 }
             } catch (t: Throwable) {
